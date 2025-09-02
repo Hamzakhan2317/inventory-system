@@ -1,7 +1,7 @@
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import authRoutes from "./routes/users.js";
+
 import productRoutes from "./routes/products.js";
 import salesRoutes from "./routes/sales.js";
 import reportingRoutes from "./routes/reporting.js";
@@ -26,7 +26,6 @@ app.use("/uploads", express.static("uploads"));
 
 
 //---------------- API ROUTES --------------------
-app.use("/api/auth", authRoutes);
 app.use("/api", UserManagementRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales", salesRoutes);
