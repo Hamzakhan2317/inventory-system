@@ -3,7 +3,7 @@ import { logIn } from "../middlewares/index.js";
 import mongoose from "mongoose";
 
 // ============================================================================
-// USER MANAGEMENT APIs (Super Admin Only ) 
+// USER MANAGEMENT APIs (Super Admin Only) 
 // ============================================================================
 
 // Create a new user
