@@ -8,7 +8,6 @@ const productSchema = new mongoose.Schema({
   },
   productId: {
     type: String,
-    required: true,
     unique: true,
     trim: true
   },
@@ -45,9 +44,29 @@ const productSchema = new mongoose.Schema({
 });
 
 // Auto-generate productId if not provided
-productSchema.pre('save', function(next) {
+productSchema.pre('save', async function(next) {
   if (!this.productId && this.isNew) {
-    this.productId = `PRD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    // Generate a unique productId
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (!isUnique && attempts < maxAttempts) {
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 10000);
+      this.productId = `PRD${timestamp}${random}`;
+      
+      // Check if this productId already exists
+      const existingProduct = await this.constructor.findOne({ productId: this.productId });
+      if (!existingProduct) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+    
+    if (!isUnique) {
+      return next(new Error('Unable to generate unique productId after multiple attempts'));
+    }
   }
   next();
 });

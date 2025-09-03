@@ -89,8 +89,7 @@ export const createSalesRecord = async (req, res) => {
       transactionId: null,
       notes: notes?.trim() || null,
       saleDate: saleDate ? new Date(saleDate) : new Date(),
-      createdBy: req.user._id,
-      status: 'active'
+      createdBy: req.user._id
     });
 
     await newSale.save();
@@ -139,8 +138,7 @@ export const getMySalesRecords = async (req, res) => {
 
     // Build filter for current user's sales only
     const filter = { 
-      salesPerson: req.user._id,
-      status: 'active'
+      salesPerson: req.user._id
     };
 
     // Date range filter
@@ -153,7 +151,6 @@ export const getMySalesRecords = async (req, res) => {
     // Search filter
     if (search) {
       filter.$or = [
-        { saleId: { $regex: search, $options: 'i' } },
         { 'customer.name': { $regex: search, $options: 'i' } },
         { 'customer.phone': { $regex: search, $options: 'i' } },
         { 'productSnapshot.name': { $regex: search, $options: 'i' } }
@@ -177,7 +174,7 @@ export const getMySalesRecords = async (req, res) => {
 
     // Get user's sales statistics
     const stats = await Sales.aggregate([
-      { $match: { salesPerson: req.user._id, status: 'active' } },
+      { $match: { salesPerson: req.user._id } },
       {
         $group: {
           _id: null,
@@ -199,7 +196,6 @@ export const getMySalesRecords = async (req, res) => {
       { 
         $match: { 
           salesPerson: req.user._id, 
-          status: 'active',
           saleDate: { $gte: today, $lt: tomorrow }
         } 
       },
@@ -404,7 +400,6 @@ export const getSalesDashboard = async (req, res) => {
         { 
           $match: { 
             salesPerson: userId, 
-            status: 'active',
             saleDate: { $gte: today, $lt: tomorrow }
           } 
         },
@@ -423,7 +418,6 @@ export const getSalesDashboard = async (req, res) => {
         { 
           $match: { 
             salesPerson: userId, 
-            status: 'active',
             saleDate: { $gte: thisWeekStart, $lt: tomorrow }
           } 
         },
@@ -441,7 +435,6 @@ export const getSalesDashboard = async (req, res) => {
         { 
           $match: { 
             salesPerson: userId, 
-            status: 'active',
             saleDate: { $gte: thisMonthStart, $lt: tomorrow }
           } 
         },
@@ -456,7 +449,7 @@ export const getSalesDashboard = async (req, res) => {
       
       // Total stats
       Sales.aggregate([
-        { $match: { salesPerson: userId, status: 'active' } },
+        { $match: { salesPerson: userId } },
         {
           $group: {
             _id: null,
@@ -468,15 +461,15 @@ export const getSalesDashboard = async (req, res) => {
       ]),
       
       // Recent sales (last 10)
-      Sales.find({ salesPerson: userId, status: 'active' })
+      Sales.find({ salesPerson: userId })
         .populate('product', 'name productId')
         .sort({ createdAt: -1 })
         .limit(10)
-        .select('saleId productSnapshot quantity finalAmount saleDate customer.name'),
+        .select('_id productSnapshot quantity finalAmount saleDate customer.name'),
       
       // Top products by user
       Sales.aggregate([
-        { $match: { salesPerson: userId, status: 'active' } },
+        { $match: { salesPerson: userId } },
         {
           $group: {
             _id: '$product',
@@ -575,6 +568,108 @@ export const getProductsForSale = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch products for sale",
+      error: error.message
+    });
+  }
+};
+
+// Get recent sales history with user and product details
+export const getRecentSalesHistory = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      startDate, 
+      endDate,
+      userId
+    } = req.query;
+
+    // Build filter for sales
+    const filter = {};
+
+    // Date range filter
+    if (startDate || endDate) {
+      filter.saleDate = {};
+      if (startDate) filter.saleDate.$gte = new Date(startDate);
+      if (endDate) filter.saleDate.$lte = new Date(endDate);
+    }
+
+    // User filter (if specified)
+    if (userId) {
+      filter.salesPerson = userId;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get recent sales with populated user and product details
+    const salesHistory = await Sales.find(filter)
+      .populate({
+        path: 'salesPerson',
+        select: 'name email role profileImage'
+      })
+      .populate({
+        path: 'product',
+        select: 'name productId price stock description'
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Sales.countDocuments(filter);
+
+    // Format the response to include the required information
+    const formattedHistory = salesHistory.map(sale => ({
+      id: sale._id,
+      saleDate: sale.saleDate,
+      user: {
+        id: sale.salesPerson._id,
+        name: sale.salesPerson.name,
+        email: sale.salesPerson.email,
+        role: sale.salesPerson.role,
+        profileImage: sale.salesPerson.profileImage
+      },
+      product: {
+        id: sale.product._id,
+        name: sale.product.name,
+        productId: sale.product.productId,
+        unitPrice: sale.unitPrice,
+        currentStock: sale.product.stock, // Remaining stock
+        description: sale.product.description
+      },
+      sale: {
+        quantity: sale.quantity,
+        totalAmount: sale.finalAmount,
+        discount: sale.discount,
+        paymentMethod: sale.paymentMethod,
+        paymentStatus: sale.paymentStatus
+      },
+      customer: {
+        name: sale.customer.name,
+        email: sale.customer.email,
+        phone: sale.customer.phone
+      },
+      notes: sale.notes,
+      createdAt: sale.createdAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        salesHistory: formattedHistory,
+        pagination: {
+          current: parseInt(page),
+          total: Math.ceil(total / parseInt(limit)),
+          count: total,
+          limit: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching recent sales history:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch recent sales history",
       error: error.message
     });
   }

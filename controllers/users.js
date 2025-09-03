@@ -1,7 +1,6 @@
 import jwt from "jsonwebtoken";
 import dayjs from "dayjs";
 import twilio from "twilio";
-import bcrypt from "bcrypt";
 import "dotenv/config";
 import AWS from "aws-sdk";
 import {
@@ -360,7 +359,7 @@ export const login = async (req, res) => {
 
   const user = await User.findOneAndUpdate({ email }, { isLoggedIn: false });
 
-  if (!user || !(await user.comparePassword(password))) {
+  if (!user || !user.comparePassword(password)) {
     throw new BadRequest("Incorrect email or password");
   }
 
@@ -441,10 +440,10 @@ export const editUser = async (req, res) => {
     user.gender = req.body.gender;
     user.phone = req.body.phone;
     if (req.body.currentPassword && req.body.currentPassword.length > 1) {
-      if (user.password == bcrypt.hashSync(req.body.currentPassword, 10)) {
+      if (user.password === req.body.currentPassword) {
         user.password = req.body.newPassword;
       } else {
-        return res.status(400).send({ msg: "worng password" });
+        return res.status(400).send({ msg: "wrong password" });
       }
     }
     const saved = await user.save();
@@ -523,7 +522,7 @@ export const changePassword = async (req, res) => {
 
   await User.findOneAndUpdate(
     { verificationToken: token },
-    { password: bcrypt.hashSync(password, 10) }
+    { password: password }
   );
 
   res.status(201).json({

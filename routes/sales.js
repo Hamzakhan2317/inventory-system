@@ -5,7 +5,8 @@ import {
   getSalesRecordById,
   updateSalesRecord,
   getSalesDashboard,
-  getProductsForSale
+  getProductsForSale,
+  getRecentSalesHistory
 } from "../controllers/sales.js";
 
 import {
@@ -24,6 +25,13 @@ router.get(
   "/dashboard",
   authenticate,
   catchAsync(getSalesDashboard)
+);
+
+// Get recent sales history with user and product details
+router.get(
+  "/history",
+  authenticate,
+  catchAsync(getRecentSalesHistory)
 );
 
 // Get available products for sales (quick access)

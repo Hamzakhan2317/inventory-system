@@ -1,10 +1,6 @@
 import mongoose from "mongoose";
 
 const salesSchema = new mongoose.Schema({
-  saleId: {
-    type: String,
-    unique: true
-  },
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
@@ -85,19 +81,13 @@ const salesSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Calculate amounts and generate sale ID
+// Calculate amounts
 salesSchema.pre('save', function(next) {
   // Calculate total amount
   this.totalAmount = this.quantity * this.unitPrice;
   
   // Calculate final amount after discount
   this.finalAmount = this.totalAmount - this.discount;
-  
-  // Generate sale ID if not exists
-  if (!this.saleId) {
-    const timestamp = Date.now().toString().slice(-6);
-    this.saleId = `SAL${timestamp}`;
-  }
   
   next();
 });

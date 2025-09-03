@@ -10,6 +10,7 @@ import "dotenv/config";
 import { connectDB } from "./database/db.js";
 import { serverError, passportMiddleware } from "./middlewares/index.js";
 import UserManagementRoutes from "./routes/userManagement.js";
+import authRoutes from "./routes/users.js";
 const app = express();
 const { PORT } = process.env;
 
@@ -26,7 +27,8 @@ app.use("/uploads", express.static("uploads"));
 
 
 //---------------- API ROUTES --------------------
-app.use("/api", UserManagementRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users", UserManagementRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/reports", reportingRoutes);

@@ -18,43 +18,43 @@ import {
 export const userManagementRoutes = Router();
 
 // User Management Routes (Requires proper permissions)
-userManagementRoutes.post("/users", 
+userManagementRoutes.post("/", 
   authenticate,
   requireUserManagement,
   catchAsync(createUser)
 );
 
-userManagementRoutes.get("/users", 
+userManagementRoutes.get("/", 
   authenticate,
   requireUserManagement,
   catchAsync(getAllUsers)
 );
 
-userManagementRoutes.get("/users/:id", 
+userManagementRoutes.get("/:id", 
   authenticate,
   requireOwnershipOrAdmin,
   catchAsync(getUserById)
 );
 
-userManagementRoutes.put("/users/:id", 
+userManagementRoutes.put("/:id", 
   authenticate,
   requireUserManagement,
   catchAsync(updateUser)
 );
 
-userManagementRoutes.patch("/users/:id/toggle-status", 
+userManagementRoutes.patch("/:id/toggle-status", 
   authenticate,
   requireUserManagement,
   catchAsync(toggleUserStatus)
 );
 
-userManagementRoutes.delete("/users/:id", 
+userManagementRoutes.delete("/:id", 
   authenticate,
   requireUserManagement,
   catchAsync(deleteUser)
 );
 
-userManagementRoutes.get("/users/:id/activity", 
+userManagementRoutes.get("/:id/activity", 
   authenticate,
   requireOwnershipOrAdmin,
   catchAsync(getUserActivity)
