@@ -211,7 +211,7 @@ export const getUserById = async (req, res) => {
     }
 
     const user = await User.findById(id)
-      .select('-password')
+      // .select('-password')
       .populate('createdBy', 'name email');
 
     if (!user) {
@@ -320,7 +320,7 @@ export const updateUser = async (req, res) => {
         id,
         { ...updates, updatedBy: req.user._id },
         { new: true, runValidators: true }
-      ).select('-password').populate('createdBy updatedBy', 'name email');
+      ).populate('createdBy updatedBy', 'name email');
 
       res.status(200).json({
         success: true,
@@ -380,7 +380,7 @@ export const updateUserBasic = async (req, res) => {
       id,
       { ...updates, updatedBy: req.user._id },
       { new: true, runValidators: true }
-    ).select('-password').populate('createdBy updatedBy', 'name email');
+      ).populate('createdBy updatedBy', 'name email');
 
     res.status(200).json({
       success: true,
@@ -653,7 +653,7 @@ export const removeProfileImage = async (req, res) => {
     }
 
     const updatedUser = await User.findById(id)
-      .select('-password')
+      // .select('-password')
       .populate('createdBy updatedBy', 'name email');
 
     res.status(200).json({
