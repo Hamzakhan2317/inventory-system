@@ -4,13 +4,14 @@ import {
   getAllUsers,
   getUserById,
   updateUser,
+  updateUserBasic,
   toggleUserStatus,
   deleteUser,
-  getUserActivity
+  getUserActivity,
+  removeProfileImage
 } from "../controllers/userManagement.js";
 import { 
   catchAsync,
-  authenticate,
   requireUserManagement,
   requireOwnershipOrAdmin
 } from "../middlewares/index.js";
@@ -19,45 +20,50 @@ export const userManagementRoutes = Router();
 
 // User Management Routes (Requires proper permissions)
 userManagementRoutes.post("/", 
-  authenticate,
   requireUserManagement,
   catchAsync(createUser)
 );
 
 userManagementRoutes.get("/", 
-  authenticate,
   requireUserManagement,
   catchAsync(getAllUsers)
 );
 
 userManagementRoutes.get("/:id", 
-  authenticate,
   requireOwnershipOrAdmin,
   catchAsync(getUserById)
 );
 
+// Update user with file upload support (profile image)
 userManagementRoutes.put("/:id", 
-  authenticate,
   requireUserManagement,
   catchAsync(updateUser)
 );
 
+// Update user basic fields only (no file upload)
+userManagementRoutes.patch("/:id/basic", 
+  requireUserManagement,
+  catchAsync(updateUserBasic)
+);
+
 userManagementRoutes.patch("/:id/toggle-status", 
-  authenticate,
   requireUserManagement,
   catchAsync(toggleUserStatus)
 );
 
 userManagementRoutes.delete("/:id", 
-  authenticate,
   requireUserManagement,
   catchAsync(deleteUser)
 );
 
 userManagementRoutes.get("/:id/activity", 
-  authenticate,
   requireOwnershipOrAdmin,
   catchAsync(getUserActivity)
+);
+
+userManagementRoutes.delete("/:id/profile-image", 
+  requireUserManagement,
+  catchAsync(removeProfileImage)
 );
 
 export default userManagementRoutes;
