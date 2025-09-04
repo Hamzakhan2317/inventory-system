@@ -7,7 +7,6 @@ import {
   exportUserSalesReport
 } from "../controllers/reporting.js";
 import {
-  authenticate,
   requireSuperAdmin,
   catchAsync
 } from "../middlewares/index.js";
@@ -21,7 +20,6 @@ const router = Router();
 // Get comprehensive overall sales report
 router.get(
   "/sales/overall",
-  authenticate,
   requireSuperAdmin,
   catchAsync(getOverallSalesReport)
 );
@@ -29,7 +27,6 @@ router.get(
 // Export overall sales report (Excel/PDF)
 router.get(
   "/sales/overall/export",
-  authenticate,
   requireSuperAdmin,
   catchAsync(exportOverallSalesReport)
 );
@@ -41,7 +38,6 @@ router.get(
 // Get all users' sales performance summary
 router.get(
   "/sales/users",
-  authenticate,
   requireSuperAdmin,
   catchAsync(getAllUsersSalesReport)
 );
@@ -49,7 +45,6 @@ router.get(
 // Get specific user's sales report
 router.get(
   "/sales/users/:userId",
-  authenticate,
   requireSuperAdmin,
   catchAsync(getUserSalesReport)
 );
@@ -57,7 +52,6 @@ router.get(
 // Export specific user's sales report (Excel/PDF)
 router.get(
   "/sales/users/:userId/export",
-  authenticate,
   requireSuperAdmin,
   catchAsync(exportUserSalesReport)
 );

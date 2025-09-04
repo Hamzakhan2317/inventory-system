@@ -1,65 +1,87 @@
 import { User, Product, Sales } from "../models/index.js";
 import mongoose from "mongoose";
+import { uploadFilesToCloudinary, deleteFromCloudinary, deleteMultipleFromCloudinary } from "../middlewares/cloudinaryUpload.js";
 
 // ============================================================================
 // PRODUCT MANAGEMENT APIs
 // ============================================================================
 
-// Create a new product
+// Create a new product with optional single image upload
 export const createProduct = async (req, res) => {
-  try {
-    const {
-      name,
-      productId,
-      description,
-      price,
-      stock
-    } = req.body;
-
-    // Validate required fields
-    if (!name || !price) {
-      return res.status(400).json({
+  // Handle file upload first
+  const fields = [
+    { name: "productImage", maxCount: 1 } // Allow single product image
+  ];
+  
+  uploadFilesToCloudinary(fields)(req, res, async (err) => {
+    if (err) {
+      return res.status(500).json({ 
         success: false,
-        message: "Name and price are required"
+        message: "Failed to upload image",
+        error: err.message 
       });
     }
 
-    // Check if productId already exists (if provided)
-    if (productId) {
-      const existingProduct = await Product.findOne({ productId });
-      if (existingProduct) {
+    try {
+      const {
+        name,
+        description,
+        price,
+        stock
+      } = req.body;
+
+      // Validate required fields
+      if (!name || !price) {
+        // Clean up uploaded image if validation fails
+        if (req.uploadedFiles?.productImage?.[0]) {
+          await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+        }
+        
         return res.status(400).json({
           success: false,
-          message: "Product with this ID already exists"
+          message: "Name and price are required"
         });
       }
+
+
+      // Get image URL if uploaded
+      let image = null;
+      if (req.uploadedFiles?.productImage?.[0]) {
+        image = req.uploadedFiles.productImage[0].url;
+      }
+
+      const newProduct = new Product({
+        name,
+        description,
+        price,
+        stock: stock || 0,
+        image,
+        createdBy: req.user._id
+      });
+
+      await newProduct.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Product created successfully",
+        data: newProduct
+      });
+
+    } catch (error) {
+      console.error('Error creating product:', error);
+      
+      // Clean up uploaded image if there's an error
+      if (req.uploadedFiles?.productImage?.[0]) {
+        await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: "Failed to create product",
+        error: error.message
+      });
     }
-
-    const newProduct = new Product({
-      name,
-      productId,
-      description,
-      price,
-      stock: stock || 0,
-      createdBy: req.user._id
-    });
-
-    await newProduct.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Product created successfully",
-      data: newProduct
-    });
-
-  } catch (error) {
-    console.error('Error creating product:', error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create product",
-      error: error.message
-    });
-  }
+  });
 };
 
 // Get all products with filtering and pagination
@@ -103,8 +125,7 @@ export const getAllProducts = async (req, res) => {
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { productId: { $regex: search, $options: 'i' } }
+        { description: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -233,8 +254,113 @@ export const getProductById = async (req, res) => {
   }
 };
 
-// Update product
+// Update product with optional single image upload
 export const updateProduct = async (req, res) => {
+  // Handle file upload first
+  const fields = [
+    { name: "productImage", maxCount: 1 } // Allow single product image
+  ];
+  
+  uploadFilesToCloudinary(fields)(req, res, async (err) => {
+    if (err) {
+      return res.status(500).json({ 
+        success: false,
+        message: "Failed to upload image",
+        error: err.message 
+      });
+    }
+
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid product ID"
+        });
+      }
+
+      // Don't allow updating certain fields
+      delete updates._id;
+      delete updates.createdBy;
+      delete updates.createdAt;
+      delete updates.updatedAt;
+
+      // Get old product data
+      const oldProduct = await Product.findById(id);
+      if (!oldProduct) {
+        // Clean up uploaded image if product not found
+        if (req.uploadedFiles?.productImage?.[0]) {
+          await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+        }
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+
+      // Handle image update
+      let newImage = oldProduct.image;
+
+      // If a new image is uploaded, replace the old one
+      if (req.uploadedFiles?.productImage?.[0]) {
+        // Delete old image from Cloudinary if it exists
+        if (oldProduct.image) {
+          await deleteFromCloudinary(oldProduct.image);
+        }
+
+        // Set new image URL
+        newImage = req.uploadedFiles.productImage[0].url;
+      }
+
+      // Handle image removal if specified in updates
+      if (updates.removeImage === true) {
+        // Delete from Cloudinary
+        if (oldProduct.image) {
+          await deleteFromCloudinary(oldProduct.image);
+        }
+        newImage = null;
+        delete updates.removeImage; // Don't include in database update
+      }
+
+      // Update the product
+      const product = await Product.findByIdAndUpdate(
+        id,
+        { 
+          ...updates, 
+          image: newImage,
+          updatedBy: req.user._id 
+        },
+        { new: true, runValidators: true }
+      ).populate('createdBy updatedBy', 'name email');
+
+      res.status(200).json({
+        success: true,
+        message: "Product updated successfully",
+        data: product
+      });
+
+    } catch (error) {
+      console.error('Error updating product:', error);
+      
+      // Clean up uploaded image if there's an error
+      if (req.uploadedFiles?.productImage?.[0]) {
+        await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: "Failed to update product",
+        error: error.message
+      });
+    }
+  });
+};
+
+// Update product without file upload (for basic field updates)
+export const updateProductBasic = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -251,8 +377,9 @@ export const updateProduct = async (req, res) => {
     delete updates.createdBy;
     delete updates.createdAt;
     delete updates.updatedAt;
+    delete updates.image; // Don't allow updating image through this endpoint
 
-    // Get old values for audit log
+    // Get old product data
     const oldProduct = await Product.findById(id);
     if (!oldProduct) {
       return res.status(404).json({
@@ -261,16 +388,6 @@ export const updateProduct = async (req, res) => {
       });
     }
 
-    // Check if productId is being changed and if it already exists
-    if (updates.productId && updates.productId !== oldProduct.productId) {
-      const existingProduct = await Product.findOne({ productId: updates.productId });
-      if (existingProduct) {
-        return res.status(400).json({
-          success: false,
-          message: "Product with this ID already exists"
-        });
-      }
-    }
 
     // Update the product
     const product = await Product.findByIdAndUpdate(
@@ -404,7 +521,56 @@ export const toggleProductStatus = async (req, res) => {
   }
 };
 
-// Delete product
+// Remove product image
+export const removeProductImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID"
+      });
+    }
+
+    const product = await Product.findById(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Delete image from Cloudinary if it exists
+    if (product.image) {
+      await deleteFromCloudinary(product.image);
+      
+      // Remove image from product record
+      product.image = null;
+      product.updatedBy = req.user._id;
+      await product.save();
+    }
+
+    const updatedProduct = await Product.findById(id)
+      .populate('createdBy updatedBy', 'name email');
+
+    res.status(200).json({
+      success: true,
+      message: "Product image removed successfully",
+      data: updatedProduct
+    });
+
+  } catch (error) {
+    console.error('Error removing product image:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to remove product image",
+      error: error.message
+    });
+  }
+};
+
+// Delete product with file cleanup
 export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -440,11 +606,22 @@ export const deleteProduct = async (req, res) => {
       });
     } else {
       // Hard delete if no sales records
+      // Delete image from Cloudinary if it exists
+      let deletedFiles = 0;
+      if (product.image) {
+        await deleteFromCloudinary(product.image);
+        deletedFiles = 1;
+      }
+
+      // Delete product from database
       await Product.findByIdAndDelete(id);
 
       return res.status(200).json({
         success: true,
-        message: "Product deleted successfully"
+        message: "Product deleted successfully",
+        data: {
+          deletedFiles
+        }
       });
     }
 
@@ -507,8 +684,7 @@ export const getAvailableProducts = async (req, res) => {
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { productId: { $regex: search, $options: 'i' } }
+        { description: { $regex: search, $options: 'i' } }
       ];
     }
 
@@ -520,7 +696,7 @@ export const getAvailableProducts = async (req, res) => {
 
     // Get only essential product information for normal users
     const products = await Product.find(filter)
-      .select('name productId description price stock isActive createdAt')
+      .select('name description price stock isActive createdAt')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
@@ -612,7 +788,7 @@ export const getProductPerformanceReport = async (req, res) => {
         $project: {
           productId: '$_id',
           productName: '$product.name',
-          productCode: '$product.productId',
+          productCode: '$product._id',
           currentStock: '$product.stock',
           isActive: '$product.isActive',
           totalSales: 1,

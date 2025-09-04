@@ -1,87 +1,116 @@
 import { User, Sales } from "../models/index.js";
 import mongoose from "mongoose";
+import { uploadFilesToCloudinary, deleteFromCloudinary } from "../middlewares/cloudinaryUpload.js";
 
 // ============================================================================
 // USER MANAGEMENT APIs (Super Admin Only)
 // ============================================================================
 
-// Create a new user
+// Create a new user with optional profile image
 export const createUser = async (req, res) => {
-  try {
-    const { name, email, phone, password, role, permissions } = req.body;
-
-    // Validate required fields
-    if (!name || !email || !password) {
-      return res.status(400).json({
+  // Handle file upload first
+  const fields = [{ name: "profileImage", maxCount: 1 }];
+  
+  uploadFilesToCloudinary(fields)(req, res, async (err) => {
+    if (err) {
+      return res.status(500).json({ 
         success: false,
-        message: "Name, email, and password are required"
+        message: "Failed to upload profile image",
+        error: err.message 
       });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User with this email already exists"
-      });
-    }
+    try {
+      const { name, email, phone, password, role, permissions } = req.body;
 
-    // Set default permissions based on role
-    let userPermissions = {
-      canManageUsers: false,
-      canManageProducts: false,
-      canViewReports: false,
-      canRecordSales: true
-    };
+      // Validate required fields
+      if (!name || !email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Name, email, and password are required"
+        });
+      }
 
-    if (role === 'super_admin' || role === 'admin') {
-      userPermissions = {
-        canManageUsers: true,
-        canManageProducts: true,
-        canViewReports: true,
+      // Check if user already exists
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        // Clean up uploaded image if user already exists
+        if (req.uploadedFiles?.profileImage?.[0]) {
+          await deleteFromCloudinary(req.uploadedFiles.profileImage[0].publicId);
+        }
+        return res.status(400).json({
+          success: false,
+          message: "User with this email already exists"
+        });
+      }
+
+      // Set default permissions based on role
+      let userPermissions = {
+        canManageUsers: false,
+        canManageProducts: false,
+        canViewReports: false,
         canRecordSales: true
       };
+
+      if (role === 'super_admin' || role === 'admin') {
+        userPermissions = {
+          canManageUsers: true,
+          canManageProducts: true,
+          canViewReports: true,
+          canRecordSales: true
+        };
+      }
+
+      // Override with custom permissions if provided
+      if (permissions) {
+        userPermissions = { ...userPermissions, ...permissions };
+      }
+
+      // Get profile image URL if uploaded
+      let profileImage = null;
+      if (req.uploadedFiles?.profileImage?.[0]) {
+        profileImage = req.uploadedFiles.profileImage[0].url;
+      }
+
+      const newUser = new User({
+        name,
+        email,
+        phone,
+        password,
+        role: role || 'normal_user',
+        permissions: userPermissions,
+        profileImage,
+        createdBy: req.user._id,
+        isVerified: true // Auto-verify admin created users
+      });
+
+      await newUser.save();
+
+      // Remove password from response
+      const userResponse = newUser.toObject();
+      delete userResponse.password;
+
+      res.status(201).json({
+        success: true,
+        message: "User created successfully",
+        data: userResponse
+      });
+
+    } catch (error) {
+      console.error('Error creating user:', error);
+      
+      // Clean up uploaded image if there's an error
+      if (req.uploadedFiles?.profileImage?.[0]) {
+        await deleteFromCloudinary(req.uploadedFiles.profileImage[0].publicId);
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: "Failed to create user",
+        error: error.message
+      });
     }
-
-    // Override with custom permissions if provided
-    if (permissions) {
-      userPermissions = { ...userPermissions, ...permissions };
-    }
-
-    const newUser = new User({
-      name,
-      email,
-      phone,
-      password,
-      role: role || 'normal_user',
-      permissions: userPermissions,
-      createdBy: req.user._id,
-      isVerified: true // Auto-verify admin created users
-    });
-
-    await newUser.save();
-
-
-
-    // Remove password from response
-    const userResponse = newUser.toObject();
-    delete userResponse.password;
-
-    res.status(201).json({
-      success: true,
-      message: "User created successfully",
-      data: userResponse
-    });
-
-  } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create user",
-      error: error.message
-    });
-  }
+  });
 };
 
 // Get all users with filtering and pagination
@@ -205,7 +234,7 @@ export const getUserById = async (req, res) => {
     ]);
 
     const recentSales = await Sales.find({ salesPerson: user._id })
-      .populate('product', 'name productId')
+      .populate('product', 'name')
       .sort({ createdAt: -1 })
       .limit(5)
       .select('saleId quantity finalAmount saleDate customer.name product');
@@ -232,8 +261,93 @@ export const getUserById = async (req, res) => {
   }
 };
 
-// Update user
+// Update user with optional profile image
 export const updateUser = async (req, res) => {
+  // Handle file upload first
+  const fields = [{ name: "profileImage", maxCount: 1 }];
+  
+  uploadFilesToCloudinary(fields)(req, res, async (err) => {
+    if (err) {
+      return res.status(500).json({ 
+        success: false,
+        message: "Failed to upload profile image",
+        error: err.message 
+      });
+    }
+
+    try {
+      console.log(req.user)
+      const { id } = req.params;
+      const updates = req.body;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid user ID"
+        });
+      }
+
+      // Don't allow updating certain fields
+      delete updates._id;
+      delete updates.createdBy;
+      delete updates.createdAt;
+      delete updates.updatedAt;
+
+      // Get old user data
+      const oldUser = await User.findById(id);
+      if (!oldUser) {
+        // Clean up uploaded image if user not found
+        if (req.uploadedFiles?.profileImage?.[0]) {
+          await deleteFromCloudinary(req.uploadedFiles.profileImage[0].publicId);
+        }
+        return res.status(404).json({
+          success: false,
+          message: "User not found"
+        });
+      }
+
+      // Handle profile image update
+      if (req.uploadedFiles?.profileImage?.[0]) {
+        // Delete old profile image if it exists
+        if (oldUser.profileImage) {
+          await deleteFromCloudinary(oldUser.profileImage);
+        }
+        // Set new profile image URL
+        updates.profileImage = req.uploadedFiles.profileImage[0].url;
+      }
+
+      // Update the user
+      const user = await User.findByIdAndUpdate(
+        id,
+        { ...updates, updatedBy: req.user._id },
+        { new: true, runValidators: true }
+      ).select('-password').populate('createdBy updatedBy', 'name email');
+
+      res.status(200).json({
+        success: true,
+        message: "User updated successfully",
+        data: user
+      });
+
+    } catch (error) {
+      console.error('Error updating user:', error);
+      
+      // Clean up uploaded image if there's an error
+      if (req.uploadedFiles?.profileImage?.[0]) {
+        await deleteFromCloudinary(req.uploadedFiles.profileImage[0].publicId);
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: "Failed to update user",
+        error: error.message
+      });
+    }
+  });
+};
+
+// Update user without file upload (for basic field updates)
+export const updateUserBasic = async (req, res) => {
   try {
     console.log(req.user)
     const { id } = req.params;
@@ -251,8 +365,9 @@ export const updateUser = async (req, res) => {
     delete updates.createdBy;
     delete updates.createdAt;
     delete updates.updatedAt;
+    delete updates.profileImage; // Don't allow updating profile image through this endpoint
 
-    // Get old values for audit log
+    // Get old user data
     const oldUser = await User.findById(id);
     if (!oldUser) {
       return res.status(404).json({
@@ -267,8 +382,6 @@ export const updateUser = async (req, res) => {
       { ...updates, updatedBy: req.user._id },
       { new: true, runValidators: true }
     ).select('-password').populate('createdBy updatedBy', 'name email');
-
-
 
     res.status(200).json({
       success: true,
@@ -374,8 +487,6 @@ export const deleteUser = async (req, res) => {
       user.updatedBy = req.user._id;
       await user.save();
 
-
-
       return res.status(200).json({
         success: true,
         message: "User deactivated successfully (has sales records, cannot delete permanently)",
@@ -383,9 +494,12 @@ export const deleteUser = async (req, res) => {
       });
     } else {
       // Hard delete if no sales records
+      // Clean up profile image from Cloudinary before deleting user
+      if (user.profileImage) {
+        await deleteFromCloudinary(user.profileImage);
+      }
+      
       await User.findByIdAndDelete(id);
-
-
 
       return res.status(200).json({
         success: true,
@@ -446,7 +560,7 @@ export const getUserActivity = async (req, res) => {
       }
 
       const sales = await Sales.find(salesFilter)
-        .populate('product', 'name productId')
+        .populate('product', 'name')
         .sort({ saleDate: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -504,6 +618,56 @@ export const getUserActivity = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch user activity",
+      error: error.message
+    });
+  }
+};
+
+// Remove user profile image
+export const removeProfileImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID"
+      });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Delete profile image from Cloudinary if it exists
+    if (user.profileImage) {
+      await deleteFromCloudinary(user.profileImage);
+      
+      // Update user to remove profile image URL
+      user.profileImage = null;
+      user.updatedBy = req.user._id;
+      await user.save();
+    }
+
+    const updatedUser = await User.findById(id)
+      .select('-password')
+      .populate('createdBy updatedBy', 'name email');
+
+    res.status(200).json({
+      success: true,
+      message: "Profile image removed successfully",
+      data: updatedUser
+    });
+
+  } catch (error) {
+    console.error('Error removing profile image:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to remove profile image",
       error: error.message
     });
   }

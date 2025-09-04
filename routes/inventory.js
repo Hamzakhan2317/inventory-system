@@ -21,7 +21,6 @@ import {
 } from "../controllers/inventory.js";
 
 import {
-  authenticate,
   requireSuperAdmin,
   requireUserManagement,
   requireProductManagement,
@@ -38,25 +37,25 @@ const router = Router();
 // ============================================================================
 
 // Create a new user
-router.post("/users", authenticate, requireUserManagement, catchAsync(createUser));
+router.post("/users", requireUserManagement, catchAsync(createUser));
 
 // Get all users with filtering and pagination
-router.get("/users", authenticate, requireUserManagement, catchAsync(getAllUsers));
+router.get("/users", requireUserManagement, catchAsync(getAllUsers));
 
 // Get user by ID
-router.get("/users/:id", authenticate, requireOwnershipOrAdmin, catchAsync(getUserById));
+router.get("/users/:id", requireOwnershipOrAdmin, catchAsync(getUserById));
 
 // Update user
-router.put("/users/:id", authenticate, requireUserManagement, catchAsync(updateUser));
+router.put("/users/:id", requireUserManagement, catchAsync(updateUser));
 
 // Activate/Deactivate user
-router.patch("/users/:id/status", authenticate, requireUserManagement, catchAsync(toggleUserStatus));
+router.patch("/users/:id/status", requireUserManagement, catchAsync(toggleUserStatus));
 
 // Delete user
-router.delete("/users/:id", authenticate, requireUserManagement, catchAsync(deleteUser));
+router.delete("/users/:id", requireUserManagement, catchAsync(deleteUser));
 
 // Get user activity/sales history
-router.get("/users/:id/activity", authenticate, requireOwnershipOrAdmin, catchAsync(getUserActivity));
+router.get("/users/:id/activity", requireOwnershipOrAdmin, catchAsync(getUserActivity));
 
 // ============================================================================
 // SALES RECORDING ROUTES
@@ -67,36 +66,36 @@ router.get("/users/:id/activity", authenticate, requireOwnershipOrAdmin, catchAs
 // Note: Normal users should use /api/sales endpoints for sales recording
 
 // Get all sales with filtering and pagination (Admin/Super Admin can see all, Normal users see only their own)
-router.get("/sales", authenticate, requireSalesAccess, catchAsync(getAllSales));
+router.get("/sales", requireSalesAccess, catchAsync(getAllSales));
 
 // ============================================================================
 // REPORTING AND ANALYTICS ROUTES (Admin Access Required)
 // ============================================================================
 
 // Get comprehensive sales reports
-router.get("/reports/sales", authenticate, requireReportAccess, catchAsync(getSalesReport));
+router.get("/reports/sales", requireReportAccess, catchAsync(getSalesReport));
 
 // Get user performance report
-router.get("/reports/users", authenticate, requireReportAccess, catchAsync(getUserPerformanceReport));
+router.get("/reports/users", requireReportAccess, catchAsync(getUserPerformanceReport));
 
 // Get product performance report
 // Product performance report moved to /api/products/reports/performance
 
 // Get inventory status report
-router.get("/reports/inventory", authenticate, requireReportAccess, catchAsync(getInventoryReport));
+router.get("/reports/inventory", requireReportAccess, catchAsync(getInventoryReport));
 
 // Get audit trail
-router.get("/reports/audit", authenticate, requireReportAccess, catchAsync(getAuditTrail));
+router.get("/reports/audit", requireReportAccess, catchAsync(getAuditTrail));
 
 // Export reports in different formats
-router.get("/reports/export", authenticate, requireReportAccess, catchAsync(exportReport));
+router.get("/reports/export", requireReportAccess, catchAsync(exportReport));
 
 // ============================================================================
 // DASHBOARD ROUTES
 // ============================================================================
 
 // Dashboard summary for different user roles
-router.get("/dashboard", authenticate, catchAsync(async (req, res) => {
+router.get("/dashboard", catchAsync(async (req, res) => {
   try {
     const userRole = req.user.role;
     const userId = req.user._id;

@@ -4,16 +4,17 @@ import {
   getAllProducts,
   getProductById,
   updateProduct,
+  updateProductBasic,
   updateProductStock,
   toggleProductStatus,
   deleteProduct,
+  removeProductImage,
   getProductFilters,
   getAvailableProducts,
   getProductPerformanceReport
 } from "../controllers/products.js";
 
 import {
-  authenticate,
   requireProductManagement,
   requireReportAccess,
   catchAsync
@@ -27,66 +28,68 @@ const router = Router();
 
 // Create a new product (Admin/Super Admin only)
 router.post("/", 
-  authenticate, 
   requireProductManagement, 
   catchAsync(createProduct)
 );
 
 // Get all products with filtering and pagination (All authenticated users)
 router.get("/", 
-  authenticate, 
   catchAsync(getAllProducts)
 );
 
 // Get available products for normal users (active products only) - Must come before /:id
 router.get("/available", 
-  authenticate, 
   catchAsync(getAvailableProducts)
 );
 
 // Get product filters (All authenticated users)
 router.get("/filters", 
-  authenticate, 
   catchAsync(getProductFilters)
 );
 
 // Get product by ID (All authenticated users)
 router.get("/:id", 
-  authenticate, 
   catchAsync(getProductById)
 );
 
-// Update product (Admin/Super Admin only)
+// Update product with file uploads (Admin/Super Admin only)
 router.put("/:id", 
-  authenticate, 
   requireProductManagement, 
   catchAsync(updateProduct)
 );
 
+// Update product basic fields only (Admin/Super Admin only)
+router.patch("/:id/basic", 
+  requireProductManagement, 
+  catchAsync(updateProductBasic)
+);
+
 // Update product stock (Admin/Super Admin only)
 router.patch("/:id/stock", 
-  authenticate, 
   requireProductManagement, 
   catchAsync(updateProductStock)
 );
 
 // Toggle product status (activate/deactivate) (Admin/Super Admin only)
 router.patch("/:id/status", 
-  authenticate, 
   requireProductManagement, 
   catchAsync(toggleProductStatus)
 );
 
+// Remove product image (Admin/Super Admin only)
+router.patch("/:id/remove-image", 
+  requireProductManagement, 
+  catchAsync(removeProductImage)
+);
+
 // Delete product (Admin/Super Admin only)
 router.delete("/:id", 
-  authenticate, 
   requireProductManagement, 
   catchAsync(deleteProduct)
 );
 
 // Get product performance report (Report access required)
 router.get("/reports/performance", 
-  authenticate, 
   requireReportAccess, 
   catchAsync(getProductPerformanceReport)
 );

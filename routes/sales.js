@@ -10,7 +10,6 @@ import {
 } from "../controllers/sales.js";
 
 import {
-  authenticate,
   catchAsync
 } from "../middlewares/index.js";
 
@@ -23,49 +22,42 @@ const router = Router();
 // Get sales dashboard for current user
 router.get(
   "/dashboard",
-  authenticate,
   catchAsync(getSalesDashboard)
 );
 
 // Get recent sales history with user and product details
 router.get(
   "/history",
-  authenticate,
   catchAsync(getRecentSalesHistory)
 );
 
 // Get available products for sales (quick access)
 router.get(
   "/products",
-  authenticate,
   catchAsync(getProductsForSale)
 );
 
 // Create a new sales record
 router.post(
   "/",
-  authenticate,
   catchAsync(createSalesRecord)
 );
 
 // Get current user's sales records
 router.get(
   "/",
-  authenticate,
   catchAsync(getMySalesRecords)
 );
 
 // Get specific sales record by ID (user's own only)
 router.get(
   "/:id",
-  authenticate,
   catchAsync(getSalesRecordById)
 );
 
 // Update sales record (limited fields for normal users)
 router.put(
   "/:id",
-  authenticate,
   catchAsync(updateSalesRecord)
 );
 

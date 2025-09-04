@@ -11,6 +11,8 @@ import { connectDB } from "./database/db.js";
 import { serverError, passportMiddleware } from "./middlewares/index.js";
 import UserManagementRoutes from "./routes/userManagement.js";
 import authRoutes from "./routes/users.js";
+import { authMiddleware } from "./middlewares/authMiddleware.js";
+
 const app = express();
 const { PORT } = process.env;
 
@@ -21,6 +23,9 @@ app.use(express.static("public"));
 app.use(cors());
 app.use(passport.initialize());
 passportMiddleware(passport);
+
+// Global authentication middleware - applies to all routes except public ones
+app.use(authMiddleware);
 
 //---------------serverFolder----------
 app.use("/uploads", express.static("uploads"));
