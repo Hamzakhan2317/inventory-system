@@ -578,7 +578,7 @@ export const getRecentSalesHistory = async (req, res) => {
   try {
     const { 
       page = 1, 
-      limit = 20, 
+      limit = 5000, 
       startDate, 
       endDate,
       userId
