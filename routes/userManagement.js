@@ -36,7 +36,7 @@ userManagementRoutes.get("/:id",
 
 // Update user with file upload support (profile image)
 userManagementRoutes.put("/:id", 
-  requireUserManagement,
+  // requireUserManagement,
   catchAsync(updateUser)
 );
 

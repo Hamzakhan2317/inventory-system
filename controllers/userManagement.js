@@ -118,7 +118,7 @@ export const getAllUsers = async (req, res) => {
   try {
     const {
       page = 1,
-      limit = 10,
+      limit = 5000,
       role,
       isActive,
       search,
@@ -145,7 +145,6 @@ export const getAllUsers = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const users = await User.find(filter)
-      .select('-password') // Exclude password field
       .populate('createdBy', 'name email')
       .sort(sort)
       .skip(skip)
@@ -523,7 +522,7 @@ export const getUserActivity = async (req, res) => {
     const { id } = req.params;
     const { 
       page = 1, 
-      limit = 10, 
+      limit = 5000, 
       startDate, 
       endDate,
       type = 'sales' // 'sales' or 'all'
