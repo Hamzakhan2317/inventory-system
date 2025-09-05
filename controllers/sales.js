@@ -583,7 +583,8 @@ export const getRecentSalesHistory = async (req, res) => {
       limit = 5000, 
       startDate, 
       endDate,
-      userId
+      userId,
+      productId
     } = req.query;
 
     // Build filter for sales
@@ -599,6 +600,11 @@ export const getRecentSalesHistory = async (req, res) => {
     // User filter (if specified)
     if (userId) {
       filter.salesPerson = userId;
+    }
+
+    // Product filter (if specified)
+    if (productId) {
+      filter.product = productId;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
