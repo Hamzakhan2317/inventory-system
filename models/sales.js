@@ -9,7 +9,8 @@ const salesSchema = new mongoose.Schema({
   productSnapshot: {
     name: String,
     productId: String,
-    price: Number
+    price: Number,
+    image: String
   },
   quantity: {
     type: Number,

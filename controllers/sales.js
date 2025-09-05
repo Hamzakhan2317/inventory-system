@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 
 // Create a new sales record
 export const createSalesRecord = async (req, res) => {
+  console.log("createSalesRecord>>>>>>>>>>>>>>>>>>>"); 
   try {
     const {
       productId,
@@ -70,7 +71,8 @@ export const createSalesRecord = async (req, res) => {
       productSnapshot: {
         name: product.name,
         productId: product.productId,
-        price: product.price
+        price: product.price,
+        image: product.image
       },
       quantity: parseInt(quantity),
       unitPrice: product.price,
@@ -101,7 +103,7 @@ export const createSalesRecord = async (req, res) => {
 
     // Populate the created sale for response
     const populatedSale = await Sales.findById(newSale._id)
-      .populate('product', 'name productId price')
+      .populate('product', 'name productId price image')
       .populate('salesPerson', 'name email');
 
     res.status(201).json({
@@ -165,7 +167,7 @@ export const getMySalesRecords = async (req, res) => {
 
     // Get user's sales records
     const sales = await Sales.find(filter)
-      .populate('product', 'name productId price stock')
+      .populate('product', 'name productId price stock image')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
@@ -256,7 +258,7 @@ export const getSalesRecordById = async (req, res) => {
     }
 
     const sale = await Sales.findById(id)
-      .populate('product', 'name productId price stock')
+      .populate('product', 'name productId price stock image')
       .populate('salesPerson', 'name email')
       .populate('createdBy', 'name email');
 
@@ -351,7 +353,7 @@ export const updateSalesRecord = async (req, res) => {
       id,
       updates,
       { new: true, runValidators: true }
-    ).populate('product', 'name productId price')
+    ).populate('product', 'name productId price image')
      .populate('salesPerson', 'name email');
 
     res.status(200).json({
@@ -462,7 +464,7 @@ export const getSalesDashboard = async (req, res) => {
       
       // Recent sales (last 10)
       Sales.find({ salesPerson: userId })
-        .populate('product', 'name productId')
+        .populate('product', 'name productId image')
         .sort({ createdAt: -1 })
         .limit(10)
         .select('_id productSnapshot quantity finalAmount saleDate customer.name'),
@@ -609,11 +611,13 @@ export const getRecentSalesHistory = async (req, res) => {
       })
       .populate({
         path: 'product',
-        select: 'name productId price stock description'
+        select: 'name productId price stock description image'
       })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
+
+      console.log("salesHistory>>>>>>>>>>>>>>>>>>>", salesHistory);
 
     const total = await Sales.countDocuments(filter);
 
@@ -629,12 +633,13 @@ export const getRecentSalesHistory = async (req, res) => {
         profileImage: sale.salesPerson.profileImage
       },
       product: {
-        id: sale.product._id,
-        name: sale.product.name,
-        productId: sale.product.productId,
+        id: sale.product?._id,
+        name: sale.product?.name,
+        productId: sale.product?.productId,
         unitPrice: sale.unitPrice,
-        currentStock: sale.product.stock, // Remaining stock
-        description: sale.product.description
+        currentStock: sale.product?.stock, // Remaining stock
+        description: sale.product?.description,
+        image: sale.product?.image
       },
       sale: {
         quantity: sale.quantity,
