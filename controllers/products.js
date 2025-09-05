@@ -229,7 +229,7 @@ export const getProductById = async (req, res) => {
       .populate('salesPerson', 'name email')
       .sort({ createdAt: -1 })
       .limit(5)
-      .select('saleId quantity finalAmount saleDate customer.name salesPerson');
+      .select('quantity finalAmount saleDate customer.name salesPerson');
 
     res.status(200).json({
       success: true,

@@ -34,7 +34,7 @@ export const getOverallSalesReport = async (req, res) => {
     // Search filter
     if (search) {
       filter.$or = [
-        { saleId: { $regex: search, $options: 'i' } },
+        // { saleId: { $regex: search, $options: 'i' } },
         { 'customer.name': { $regex: search, $options: 'i' } },
         { 'customer.phone': { $regex: search, $options: 'i' } },
         { transactionId: { $regex: search, $options: 'i' } }
@@ -548,7 +548,7 @@ export const exportOverallSalesReport = async (req, res) => {
       // Add data rows
       salesData.forEach((sale) => {
         worksheet.addRow({
-          saleId: sale.saleId,
+          // saleId: sale.saleId,
           saleDate: sale.saleDate.toISOString().split('T')[0],
           productName: sale.product?.name || 'N/A',
           productId: sale.product?.productId || 'N/A',
@@ -589,7 +589,7 @@ export const exportOverallSalesReport = async (req, res) => {
       
       // Prepare table data
       const tableData = salesData.map(sale => [
-        sale.saleId,
+        // sale.saleId,
         sale.saleDate.toLocaleDateString(),
         sale.product?.name || 'N/A',
         sale.quantity,
@@ -690,7 +690,7 @@ export const exportUserSalesReport = async (req, res) => {
       // Add data rows
       salesData.forEach((sale) => {
         worksheet.addRow([
-          sale.saleId,
+          // sale.saleId,
           sale.saleDate.toISOString().split('T')[0],
           sale.product?.name || 'N/A',
           sale.product?.productId || 'N/A',
@@ -723,7 +723,7 @@ export const exportUserSalesReport = async (req, res) => {
       
       // Prepare table data
       const tableData = salesData.map(sale => [
-        sale.saleId,
+        // sale.saleId,
         sale.saleDate.toLocaleDateString(),
         sale.product?.name || 'N/A',
         sale.quantity,

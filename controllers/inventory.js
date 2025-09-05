@@ -1143,7 +1143,8 @@ export const createSale = async (req, res) => {
       productSnapshot: {
         name: product.name,
         productId: product.productId,
-        price: product.price
+        price: product.price,
+        image: product.image
       },
       quantity,
       unitPrice: product.price,
@@ -1174,7 +1175,7 @@ export const createSale = async (req, res) => {
 
     // Populate the created sale for response
     const populatedSale = await Sales.findById(newSale._id)
-      .populate('product', 'name productId')
+      .populate('product', 'name productId image')
       .populate('salesPerson', 'name email');
 
     res.status(201).json({
