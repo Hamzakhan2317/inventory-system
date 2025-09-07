@@ -657,7 +657,8 @@ export const getRecentSalesHistory = async (req, res) => {
       customer: {
         name: sale.customer.name,
         email: sale.customer.email,
-        phone: sale.customer.phone
+        phone: sale.customer.phone,
+        address: sale.customer?.address
       },
       notes: sale.notes,
       createdAt: sale.createdAt
