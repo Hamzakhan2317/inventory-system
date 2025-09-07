@@ -477,34 +477,21 @@ export const deleteUser = async (req, res) => {
       });
     }
 
-    // Check if user has sales records
-    const salesCount = await Sales.countDocuments({ salesPerson: user._id });
-    
-    if (salesCount > 0) {
-      // Soft delete - just deactivate
-      user.isActive = false;
-      user.updatedBy = req.user._id;
-      await user.save();
+    // Only update isActive status - don't actually delete the user
+    user.isActive = false;
+    user.updatedBy = req.user._id;
+    await user.save();
 
-      return res.status(200).json({
-        success: true,
-        message: "User deactivated successfully (has sales records, cannot delete permanently)",
-        data: { userId: user._id, isActive: false }
-      });
-    } else {
-      // Hard delete if no sales records
-      // Clean up profile image from Cloudinary before deleting user
-      if (user.profileImage) {
-        await deleteFromCloudinary(user.profileImage);
+    return res.status(200).json({
+      success: true,
+      message: "User deactivated successfully",
+      data: { 
+        userId: user._id, 
+        isActive: false,
+        userName: user.name,
+        userEmail: user.email
       }
-      
-      await User.findByIdAndDelete(id);
-
-      return res.status(200).json({
-        success: true,
-        message: "User deleted successfully"
-      });
-    }
+    });
 
   } catch (error) {
     console.error('Error deleting user:', error);
