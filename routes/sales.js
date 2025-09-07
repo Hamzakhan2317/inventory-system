@@ -6,7 +6,9 @@ import {
   updateSalesRecord,
   getSalesDashboard,
   getProductsForSale,
-  getRecentSalesHistory
+  getRecentSalesHistory,
+  editSalesHistory,
+  deleteSalesHistory
 } from "../controllers/sales.js";
 
 import {
@@ -59,6 +61,18 @@ router.get(
 router.put(
   "/:id",
   catchAsync(updateSalesRecord)
+);
+
+// Edit sales history with full product management and stock handling
+router.put(
+  "/history/:id",
+  catchAsync(editSalesHistory)
+);
+
+// Delete sales history with stock reversion
+router.delete(
+  "/history/:id",
+  catchAsync(deleteSalesHistory)
 );
 
 export default router;

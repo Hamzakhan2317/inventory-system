@@ -685,3 +685,350 @@ export const getRecentSalesHistory = async (req, res) => {
     });
   }
 };
+
+// Edit sales history with stock management
+export const editSalesHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      productId,
+      quantity,
+      customer,
+      discount = 0,
+      paymentMethod,
+      paymentStatus,
+      transactionId,
+      notes,
+      saleDate
+    } = req.body;
+
+    // Validate sales record ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid sales record ID"
+      });
+    }
+
+    // Get existing sales record
+    const existingSale = await Sales.findById(id).populate('product');
+    if (!existingSale) {
+      return res.status(404).json({
+        success: false,
+        message: "Sales record not found"
+      });
+    }
+
+    // Store original values for rollback
+    const originalQuantity = existingSale.quantity;
+    const originalProduct = existingSale.product;
+
+    // Validate required fields
+    if (!productId || !quantity || !customer?.name) {
+      return res.status(400).json({
+        success: false,
+        message: "Product ID, quantity, and customer name are required"
+      });
+    }
+
+    // Validate quantity
+    if (quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be greater than 0"
+      });
+    }
+
+    // Validate customer information
+    if (!customer.name || customer.name.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Customer name must be at least 2 characters long"
+      });
+    }
+
+    // Check if product is changing
+    const isProductChanged = productId !== existingSale.product._id.toString();
+    
+    let newProduct;
+    if (isProductChanged) {
+      // Get new product
+      newProduct = await Product.findById(productId);
+      if (!newProduct) {
+        return res.status(404).json({
+          success: false,
+          message: "New product not found"
+        });
+      }
+
+      if (!newProduct.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: "New product is not available for sale"
+        });
+      }
+    } else {
+      newProduct = originalProduct;
+    }
+
+    // Calculate stock changes
+    let stockChanges = {};
+    
+    if (isProductChanged) {
+      // Different product: revert original product stock and deduct from new product
+      const originalProductStockAfterRevert = originalProduct.stock + originalQuantity;
+      const newProductStockAfterDeduct = newProduct.stock - quantity;
+
+      // Check if new product has enough stock
+      if (newProduct.stock < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for new product. Available: ${newProduct.stock}, Requested: ${quantity}`
+        });
+      }
+
+      stockChanges = {
+        originalProduct: {
+          id: originalProduct._id,
+          newStock: originalProductStockAfterRevert
+        },
+        newProduct: {
+          id: newProduct._id,
+          newStock: newProductStockAfterDeduct
+        }
+      };
+    } else {
+      // Same product: calculate stock difference
+      const quantityDifference = quantity - originalQuantity;
+      const newStock = originalProduct.stock - quantityDifference;
+
+      // Check if product has enough stock for increase
+      if (quantityDifference > 0 && originalProduct.stock < quantityDifference) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for quantity increase. Available: ${originalProduct.stock}, Additional needed: ${quantityDifference}`
+        });
+      }
+
+      // Prevent negative stock
+      if (newStock < 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid operation would result in negative stock`
+        });
+      }
+
+      stockChanges = {
+        sameProduct: {
+          id: originalProduct._id,
+          newStock: newStock
+        }
+      };
+    }
+
+    // Start transaction-like operations
+    try {
+      // Update product stocks
+      if (stockChanges.originalProduct) {
+        // Different products
+        await Product.findByIdAndUpdate(stockChanges.originalProduct.id, {
+          stock: stockChanges.originalProduct.newStock,
+          updatedBy: req.user._id
+        });
+
+        await Product.findByIdAndUpdate(stockChanges.newProduct.id, {
+          stock: stockChanges.newProduct.newStock,
+          updatedBy: req.user._id
+        });
+      } else {
+        // Same product
+        await Product.findByIdAndUpdate(stockChanges.sameProduct.id, {
+          stock: stockChanges.sameProduct.newStock,
+          updatedBy: req.user._id
+        });
+      }
+
+      // Update sales record
+      const updates = {
+        product: newProduct._id,
+        productSnapshot: {
+          name: newProduct.name,
+          productId: newProduct.productId || newProduct._id,
+          price: newProduct.price,
+          image: newProduct.image
+        },
+        quantity: parseInt(quantity),
+        unitPrice: newProduct.price,
+        totalAmount: parseInt(quantity) * newProduct.price,
+        discount: parseFloat(discount) || 0,
+        finalAmount: (parseInt(quantity) * newProduct.price) - (parseFloat(discount) || 0),
+        customer: {
+          name: customer.name.trim(),
+          email: customer.email?.toLowerCase()?.trim() || null,
+          phone: customer.phone?.trim() || null,
+          address: customer.address?.trim() || null
+        },
+        paymentMethod: paymentMethod || existingSale.paymentMethod,
+        paymentStatus: paymentStatus || existingSale.paymentStatus,
+        transactionId: transactionId || existingSale.transactionId,
+        notes: notes?.trim() || null,
+        saleDate: saleDate ? new Date(saleDate) : existingSale.saleDate,
+        updatedBy: req.user._id
+      };
+
+      const updatedSale = await Sales.findByIdAndUpdate(
+        id,
+        updates,
+        { new: true, runValidators: true }
+      ).populate('product', 'name productId price stock image')
+       .populate('salesPerson', 'name email')
+       .populate('updatedBy', 'name email');
+
+      res.status(200).json({
+        success: true,
+        message: "Sales history updated successfully",
+        data: {
+          sale: updatedSale,
+          stockChanges: {
+            originalProduct: stockChanges.originalProduct ? {
+              id: stockChanges.originalProduct.id,
+              newStock: stockChanges.originalProduct.newStock
+            } : null,
+            newProduct: stockChanges.newProduct ? {
+              id: stockChanges.newProduct.id,
+              newStock: stockChanges.newProduct.newStock
+            } : stockChanges.sameProduct ? {
+              id: stockChanges.sameProduct.id,
+              newStock: stockChanges.sameProduct.newStock
+            } : null
+          }
+        }
+      });
+
+    } catch (stockUpdateError) {
+      // Rollback attempt if stock update fails
+      console.error('Stock update failed, attempting rollback:', stockUpdateError);
+      
+      // Try to revert stock changes
+      try {
+        if (stockChanges.originalProduct) {
+          await Product.findByIdAndUpdate(stockChanges.originalProduct.id, {
+            stock: originalProduct.stock
+          });
+          await Product.findByIdAndUpdate(stockChanges.newProduct.id, {
+            stock: newProduct.stock
+          });
+        } else {
+          await Product.findByIdAndUpdate(stockChanges.sameProduct.id, {
+            stock: originalProduct.stock
+          });
+        }
+      } catch (rollbackError) {
+        console.error('Rollback failed:', rollbackError);
+      }
+
+      throw stockUpdateError;
+    }
+
+  } catch (error) {
+    console.error('Error editing sales history:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to edit sales history",
+      error: error.message
+    });
+  }
+};
+
+// Delete sales history with stock reversion
+export const deleteSalesHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate sales record ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid sales record ID"
+      });
+    }
+
+    // Get existing sales record with product details
+    const existingSale = await Sales.findById(id).populate('product');
+    if (!existingSale) {
+      return res.status(404).json({
+        success: false,
+        message: "Sales record not found"
+      });
+    }
+
+    // Store values for stock reversion
+    const product = existingSale.product;
+    const quantityToRevert = existingSale.quantity;
+    const saleDetails = {
+      id: existingSale._id,
+      productName: existingSale.productSnapshot?.name || product?.name,
+      quantity: quantityToRevert,
+      finalAmount: existingSale.finalAmount,
+      customer: existingSale.customer.name
+    };
+
+    // Check if product still exists
+    if (!product) {
+      return res.status(400).json({
+        success: false,
+        message: "Associated product not found, cannot revert stock"
+      });
+    }
+
+    try {
+      // Revert product stock (add back the sold quantity)
+      const newStock = product.stock + quantityToRevert;
+      
+      await Product.findByIdAndUpdate(product._id, {
+        stock: newStock,
+        updatedBy: req.user._id
+      });
+
+      // Delete the sales record
+      await Sales.findByIdAndDelete(id);
+
+      res.status(200).json({
+        success: true,
+        message: "Sales history deleted successfully",
+        data: {
+          deletedSale: saleDetails,
+          stockReverted: {
+            productId: product._id,
+            productName: product.name,
+            previousStock: product.stock,
+            newStock: newStock,
+            quantityReverted: quantityToRevert
+          }
+        }
+      });
+
+    } catch (deleteError) {
+      console.error('Delete operation failed:', deleteError);
+      
+      // If deletion fails after stock update, try to revert stock
+      try {
+        await Product.findByIdAndUpdate(product._id, {
+          stock: product.stock
+        });
+      } catch (revertError) {
+        console.error('Stock revert failed:', revertError);
+      }
+
+      throw deleteError;
+    }
+
+  } catch (error) {
+    console.error('Error deleting sales history:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete sales history",
+      error: error.message
+    });
+  }
+};
