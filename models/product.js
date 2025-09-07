@@ -23,6 +23,21 @@ const productSchema = new mongoose.Schema({
   },
   // Single image field (URL string like user profileImage)
   image: String,
+  // Category array with name, quantity, and price (optional)
+  category: [{
+    name: {
+      type: String,
+      trim: true
+    },
+    quantity: {
+      type: Number,
+      min: 0
+    },
+    price: {
+      type: Number,
+      min: 0
+    }
+  }],
   isActive: {
     type: Boolean,
     default: true
