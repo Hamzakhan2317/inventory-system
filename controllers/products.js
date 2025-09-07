@@ -27,7 +27,8 @@ export const createProduct = async (req, res) => {
         name,
         description,
         price,
-        stock
+        stock,
+        category
       } = req.body;
 
       // Validate required fields
@@ -43,6 +44,47 @@ export const createProduct = async (req, res) => {
         });
       }
 
+      // Validate category if provided (completely optional)
+      if (category && Array.isArray(category) && category.length > 0) {
+        for (let i = 0; i < category.length; i++) {
+          const cat = category[i];
+          
+          // Only validate if any field is provided
+          if (cat.name || cat.quantity !== undefined || cat.price !== undefined) {
+            // If providing category data, ensure it's complete
+            if (!cat.name || cat.quantity === undefined || cat.price === undefined) {
+              // Clean up uploaded image if validation fails
+              if (req.uploadedFiles?.productImage?.[0]) {
+                await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+              }
+              
+              return res.status(400).json({
+                success: false,
+                message: `Category item ${i + 1}: if providing category data, name, quantity, and price are all required`
+              });
+            }
+            
+            if (cat.quantity < 0 || cat.price < 0) {
+              // Clean up uploaded image if validation fails
+              if (req.uploadedFiles?.productImage?.[0]) {
+                await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+              }
+              
+              return res.status(400).json({
+                success: false,
+                message: `Category item ${i + 1}: quantity and price must be non-negative`
+              });
+            }
+          }
+        }
+        
+        // Filter out empty category objects
+        const validCategories = category.filter(cat => 
+          cat.name && cat.quantity !== undefined && cat.price !== undefined
+        );
+        req.body.category = validCategories;
+      }
+
 
       // Get image URL if uploaded
       let image = null;
@@ -56,6 +98,7 @@ export const createProduct = async (req, res) => {
         price,
         stock: stock || 0,
         image,
+        category: category || [],
         createdBy: req.user._id
       });
 
@@ -89,7 +132,7 @@ export const getAllProducts = async (req, res) => {
   try {
     const {
       page = 1,
-      limit = 10,
+      limit = 5000,
       category,
       brand,
       isActive,
@@ -287,6 +330,47 @@ export const updateProduct = async (req, res) => {
       delete updates.createdAt;
       delete updates.updatedAt;
 
+      // Validate category if provided (completely optional)
+      if (updates.category && Array.isArray(updates.category) && updates.category.length > 0) {
+        for (let i = 0; i < updates.category.length; i++) {
+          const cat = updates.category[i];
+          
+          // Only validate if any field is provided
+          if (cat.name || cat.quantity !== undefined || cat.price !== undefined) {
+            // If providing category data, ensure it's complete
+            if (!cat.name || cat.quantity === undefined || cat.price === undefined) {
+              // Clean up uploaded image if validation fails
+              if (req.uploadedFiles?.productImage?.[0]) {
+                await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+              }
+              
+              return res.status(400).json({
+                success: false,
+                message: `Category item ${i + 1}: if providing category data, name, quantity, and price are all required`
+              });
+            }
+            
+            if (cat.quantity < 0 || cat.price < 0) {
+              // Clean up uploaded image if validation fails
+              if (req.uploadedFiles?.productImage?.[0]) {
+                await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+              }
+              
+              return res.status(400).json({
+                success: false,
+                message: `Category item ${i + 1}: quantity and price must be non-negative`
+              });
+            }
+          }
+        }
+        
+        // Filter out empty category objects
+        const validCategories = updates.category.filter(cat => 
+          cat.name && cat.quantity !== undefined && cat.price !== undefined
+        );
+        updates.category = validCategories;
+      }
+
       // Get old product data
       const oldProduct = await Product.findById(id);
       if (!oldProduct) {
@@ -378,6 +462,37 @@ export const updateProductBasic = async (req, res) => {
     delete updates.createdAt;
     delete updates.updatedAt;
     delete updates.image; // Don't allow updating image through this endpoint
+
+    // Validate category if provided (completely optional)
+    if (updates.category && Array.isArray(updates.category) && updates.category.length > 0) {
+      for (let i = 0; i < updates.category.length; i++) {
+        const cat = updates.category[i];
+        
+        // Only validate if any field is provided
+        if (cat.name || cat.quantity !== undefined || cat.price !== undefined) {
+          // If providing category data, ensure it's complete
+          if (!cat.name || cat.quantity === undefined || cat.price === undefined) {
+            return res.status(400).json({
+              success: false,
+              message: `Category item ${i + 1}: if providing category data, name, quantity, and price are all required`
+            });
+          }
+          
+          if (cat.quantity < 0 || cat.price < 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Category item ${i + 1}: quantity and price must be non-negative`
+            });
+          }
+        }
+      }
+      
+      // Filter out empty category objects
+      const validCategories = updates.category.filter(cat => 
+        cat.name && cat.quantity !== undefined && cat.price !== undefined
+      );
+      updates.category = validCategories;
+    }
 
     // Get old product data
     const oldProduct = await Product.findById(id);
@@ -696,7 +811,7 @@ export const getAvailableProducts = async (req, res) => {
 
     // Get only essential product information for normal users
     const products = await Product.find(filter)
-      .select('name description price stock isActive createdAt')
+      .select('name description price stock isActive category image createdAt')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
