@@ -43,6 +43,14 @@ export const authMiddleware = (req, res, next) => {
       });
     }
 
+    // Check if user account is active
+    if (!user.isActive) {
+      return res.status(401).json({
+        message: "Account has been deactivated. Please contact administrator.",
+        errorType: "ACCOUNT_DEACTIVATED",
+        requiresReauth: true,
+      });
+    }
     
     // Add timezone to user object
     req.user = user;
@@ -94,6 +102,15 @@ export const refreshAuthMiddleware = (req, res, next) => {
           message,
           errorType,
           requiresReauth: true, // tell frontend to force re-login
+        });
+      }
+
+      // Check if user account is active
+      if (!user.isActive) {
+        return res.status(401).json({
+          message: "Account has been deactivated. Please contact administrator.",
+          errorType: "ACCOUNT_DEACTIVATED",
+          requiresReauth: true,
         });
       }
 
