@@ -7,10 +7,16 @@ export const login = async (req, res) => {
   if (![email, password].every(Boolean))
     throw new BadRequest("Please fill all inputs!");
 
-  const user = await User.findOneAndUpdate({ email }, { isLoggedIn: false });
+  // const user = await User.findOneAndUpdate({ email }, { isLoggedIn: false });
+  const user = await User.findOne({ email });
 
   if (!user || !user.comparePassword(password)) {
     throw new BadRequest("Incorrect email or password");
+  }
+
+  // Check if user account is active
+  if (!user.isActive) {
+    throw new BadRequest("Your account has been deactivated. Please contact administrator.");
   }
 
   const token = await logIn({ _id: user?._id });
