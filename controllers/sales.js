@@ -873,8 +873,7 @@ export const editSalesHistory = async (req, res) => {
         paymentStatus: paymentStatus || existingSale.paymentStatus,
         transactionId: transactionId || existingSale.transactionId,
         notes: notes?.trim() || null,
-        saleDate: saleDate ? new Date(saleDate) : existingSale.saleDate,
-        updatedBy: req.user._id
+        saleDate: saleDate ? new Date(saleDate) : existingSale.saleDate
       };
 
       const updatedSale = await Sales.findByIdAndUpdate(
@@ -882,8 +881,7 @@ export const editSalesHistory = async (req, res) => {
         updates,
         { new: true, runValidators: true }
       ).populate('product', 'name productId price stock image')
-       .populate('salesPerson', 'name email')
-       .populate('updatedBy', 'name email');
+       .populate('salesPerson', 'name email');
 
       res.status(200).json({
         success: true,
