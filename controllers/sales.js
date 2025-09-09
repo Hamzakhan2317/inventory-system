@@ -11,6 +11,7 @@ export const createSalesRecord = async (req, res) => {
   try {
     const {
       productId,
+      categoryId,
       quantity,
       customer,
       saleDate,
@@ -49,12 +50,35 @@ export const createSalesRecord = async (req, res) => {
       });
     }
 
+    // Validate category if categoryId is provided
+    let selectedCategory = null;
+    if (categoryId) {
+      selectedCategory = product.category.id(categoryId);
+      if (!selectedCategory) {
+        return res.status(404).json({
+          success: false,
+          message: "Category not found for this product"
+        });
+      }
+    }
+
     // Check stock availability
-    if (product.stock < quantity) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient stock. Available: ${product.stock}, Requested: ${quantity}`
-      });
+    if (selectedCategory) {
+      // Check category quantity if category is selected
+      if (!selectedCategory.quantity || selectedCategory.quantity < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient category quantity. Available: ${selectedCategory.quantity || 0}, Requested: ${quantity}`
+        });
+      }
+    } else {
+      // Check product stock if no category is selected
+      if (product.stock < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock. Available: ${product.stock}, Requested: ${quantity}`
+        });
+      }
     }
 
     // Validate customer information
@@ -68,16 +92,22 @@ export const createSalesRecord = async (req, res) => {
     // Create sale record with product snapshot
     const newSale = new Sales({
       product: product._id,
+      categoryId: categoryId || null,
       productSnapshot: {
         name: product.name,
         productId: product.productId,
-        price: product.price,
-        image: product.image
+        price: selectedCategory ? selectedCategory.price : product.price,
+        image: product.image,
+        category: selectedCategory ? {
+          name: selectedCategory.name,
+          quantity: selectedCategory.quantity,
+          price: selectedCategory.price
+        } : null
       },
       quantity: parseInt(quantity),
-      unitPrice: product.price,
-      totalAmount: parseInt(quantity) * product.price,
-      finalAmount: parseInt(quantity) * product.price,
+      unitPrice: selectedCategory ? selectedCategory.price : product.price,
+      totalAmount: parseInt(quantity) * (selectedCategory ? selectedCategory.price : product.price),
+      finalAmount: parseInt(quantity) * (selectedCategory ? selectedCategory.price : product.price),
       discount: 0, // Normal users can't apply discounts
       customer: {
         name: customer.name.trim(),
@@ -96,8 +126,14 @@ export const createSalesRecord = async (req, res) => {
 
     await newSale.save();
 
-    // Update product stock
-    product.stock -= parseInt(quantity);
+    // Update stock or category quantity
+    if (selectedCategory) {
+      // Reduce category quantity
+      selectedCategory.quantity -= parseInt(quantity);
+    } else {
+      // Reduce product stock
+      product.stock -= parseInt(quantity);
+    }
     product.updatedBy = req.user._id;
     await product.save();
 
@@ -111,7 +147,12 @@ export const createSalesRecord = async (req, res) => {
       message: "Sales record created successfully",
       data: {
         sale: populatedSale,
-        productStockAfterSale: product.stock
+        productStockAfterSale: product.stock,
+        categoryInfo: selectedCategory ? {
+          categoryId: selectedCategory._id,
+          categoryName: selectedCategory.name,
+          categoryQuantityAfterSale: selectedCategory.quantity
+        } : null
       }
     });
 
@@ -167,7 +208,7 @@ export const getMySalesRecords = async (req, res) => {
 
     // Get user's sales records
     const sales = await Sales.find(filter)
-      .populate('product', 'name productId price stock image')
+      .populate('product', 'name productId price stock image category')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
@@ -258,7 +299,7 @@ export const getSalesRecordById = async (req, res) => {
     }
 
     const sale = await Sales.findById(id)
-      .populate('product', 'name productId price stock image')
+      .populate('product', 'name productId price stock image category')
       .populate('salesPerson', 'name email')
       .populate('createdBy', 'name email');
 
@@ -353,7 +394,7 @@ export const updateSalesRecord = async (req, res) => {
       id,
       updates,
       { new: true, runValidators: true }
-    ).populate('product', 'name productId price image')
+    ).populate('product', 'name productId price image category')
      .populate('salesPerson', 'name email');
 
     res.status(200).json({
@@ -553,7 +594,7 @@ export const getProductsForSale = async (req, res) => {
     }
 
     const products = await Product.find(filter)
-      .select('name productId price stock description')
+      .select('name productId price stock description category')
       .sort({ name: 1 })
       .limit(parseInt(limit));
 
@@ -617,7 +658,7 @@ export const getRecentSalesHistory = async (req, res) => {
       })
       .populate({
         path: 'product',
-        select: 'name productId price stock description image'
+        select: 'name productId price stock description image category'
       })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -647,6 +688,12 @@ export const getRecentSalesHistory = async (req, res) => {
         description: sale.product?.description,
         image: sale.product?.image
       },
+      category: sale.categoryId ? {
+        id: sale.categoryId,
+        name: sale.productSnapshot?.category?.name,
+        quantity: sale.productSnapshot?.category?.quantity,
+        price: sale.productSnapshot?.category?.price
+      } : null,
       sale: {
         quantity: sale.quantity,
         totalAmount: sale.finalAmount,
@@ -693,6 +740,7 @@ export const editSalesHistory = async (req, res) => {
     const { id } = req.params;
     const {
       productId,
+      categoryId,
       quantity,
       customer,
       discount = 0,
@@ -772,21 +820,45 @@ export const editSalesHistory = async (req, res) => {
       newProduct = originalProduct;
     }
 
+    // Validate category if categoryId is provided
+    let selectedCategory = null;
+    if (categoryId) {
+      selectedCategory = newProduct.category.id(categoryId);
+      if (!selectedCategory) {
+        return res.status(404).json({
+          success: false,
+          message: "Category not found for this product"
+        });
+      }
+    }
+
     // Calculate stock changes
     let stockChanges = {};
     
     if (isProductChanged) {
       // Different product: revert original product stock and deduct from new product
       const originalProductStockAfterRevert = originalProduct.stock + originalQuantity;
-      const newProductStockAfterDeduct = newProduct.stock - quantity;
-
-      // Check if new product has enough stock
-      if (newProduct.stock < quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for new product. Available: ${newProduct.stock}, Requested: ${quantity}`
-        });
+      
+      // Check stock availability for new product
+      if (selectedCategory) {
+        // Check category quantity if category is selected
+        if (!selectedCategory.quantity || selectedCategory.quantity < quantity) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient category quantity for new product. Available: ${selectedCategory.quantity || 0}, Requested: ${quantity}`
+          });
+        }
+      } else {
+        // Check product stock if no category is selected
+        if (newProduct.stock < quantity) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for new product. Available: ${newProduct.stock}, Requested: ${quantity}`
+          });
+        }
       }
+      
+      const newProductStockAfterDeduct = selectedCategory ? newProduct.stock : newProduct.stock - quantity;
 
       stockChanges = {
         originalProduct: {
@@ -801,35 +873,67 @@ export const editSalesHistory = async (req, res) => {
     } else {
       // Same product: calculate stock difference
       const quantityDifference = quantity - originalQuantity;
-      const newStock = originalProduct.stock - quantityDifference;
-
-      // Check if product has enough stock for increase
-      if (quantityDifference > 0 && originalProduct.stock < quantityDifference) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for quantity increase. Available: ${originalProduct.stock}, Additional needed: ${quantityDifference}`
-        });
-      }
-
-      // Prevent negative stock
-      if (newStock < 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid operation would result in negative stock`
-        });
-      }
-
-      stockChanges = {
-        sameProduct: {
-          id: originalProduct._id,
-          newStock: newStock
+      
+      if (selectedCategory) {
+        // Handle category quantity changes
+        const newCategoryQuantity = selectedCategory.quantity - quantityDifference;
+        
+        // Check if category has enough quantity for increase
+        if (quantityDifference > 0 && selectedCategory.quantity < quantityDifference) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient category quantity for increase. Available: ${selectedCategory.quantity}, Additional needed: ${quantityDifference}`
+          });
         }
-      };
+
+        // Prevent negative category quantity
+        if (newCategoryQuantity < 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid operation would result in negative category quantity`
+          });
+        }
+
+        stockChanges = {
+          sameProduct: {
+            id: originalProduct._id,
+            newStock: originalProduct.stock, // Stock remains unchanged
+            categoryId: categoryId,
+            newCategoryQuantity: newCategoryQuantity
+          }
+        };
+      } else {
+        // Handle product stock changes
+        const newStock = originalProduct.stock - quantityDifference;
+
+        // Check if product has enough stock for increase
+        if (quantityDifference > 0 && originalProduct.stock < quantityDifference) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for quantity increase. Available: ${originalProduct.stock}, Additional needed: ${quantityDifference}`
+          });
+        }
+
+        // Prevent negative stock
+        if (newStock < 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid operation would result in negative stock`
+          });
+        }
+
+        stockChanges = {
+          sameProduct: {
+            id: originalProduct._id,
+            newStock: newStock
+          }
+        };
+      }
     }
 
     // Start transaction-like operations
     try {
-      // Update product stocks
+      // Update product stocks and category quantities
       if (stockChanges.originalProduct) {
         // Different products
         await Product.findByIdAndUpdate(stockChanges.originalProduct.id, {
@@ -837,32 +941,57 @@ export const editSalesHistory = async (req, res) => {
           updatedBy: req.user._id
         });
 
-        await Product.findByIdAndUpdate(stockChanges.newProduct.id, {
-          stock: stockChanges.newProduct.newStock,
-          updatedBy: req.user._id
-        });
+        if (selectedCategory) {
+          // Update category quantity for new product
+          const newProductDoc = await Product.findById(stockChanges.newProduct.id);
+          const categoryToUpdate = newProductDoc.category.id(categoryId);
+          categoryToUpdate.quantity -= quantity;
+          await newProductDoc.save();
+        } else {
+          // Update product stock for new product
+          await Product.findByIdAndUpdate(stockChanges.newProduct.id, {
+            stock: stockChanges.newProduct.newStock,
+            updatedBy: req.user._id
+          });
+        }
       } else {
         // Same product
-        await Product.findByIdAndUpdate(stockChanges.sameProduct.id, {
-          stock: stockChanges.sameProduct.newStock,
-          updatedBy: req.user._id
-        });
+        if (stockChanges.sameProduct.categoryId) {
+          // Update category quantity
+          const productDoc = await Product.findById(stockChanges.sameProduct.id);
+          const categoryToUpdate = productDoc.category.id(stockChanges.sameProduct.categoryId);
+          categoryToUpdate.quantity = stockChanges.sameProduct.newCategoryQuantity;
+          productDoc.updatedBy = req.user._id;
+          await productDoc.save();
+        } else {
+          // Update product stock
+          await Product.findByIdAndUpdate(stockChanges.sameProduct.id, {
+            stock: stockChanges.sameProduct.newStock,
+            updatedBy: req.user._id
+          });
+        }
       }
 
       // Update sales record
       const updates = {
         product: newProduct._id,
+        categoryId: categoryId || null,
         productSnapshot: {
           name: newProduct.name,
           productId: newProduct.productId || newProduct._id,
-          price: newProduct.price,
-          image: newProduct.image
+          price: selectedCategory ? selectedCategory.price : newProduct.price,
+          image: newProduct.image,
+          category: selectedCategory ? {
+            name: selectedCategory.name,
+            quantity: selectedCategory.quantity,
+            price: selectedCategory.price
+          } : null
         },
         quantity: parseInt(quantity),
-        unitPrice: newProduct.price,
-        totalAmount: parseInt(quantity) * newProduct.price,
+        unitPrice: selectedCategory ? selectedCategory.price : newProduct.price,
+        totalAmount: parseInt(quantity) * (selectedCategory ? selectedCategory.price : newProduct.price),
         discount: parseFloat(discount) || 0,
-        finalAmount: (parseInt(quantity) * newProduct.price) - (parseFloat(discount) || 0),
+        finalAmount: (parseInt(quantity) * (selectedCategory ? selectedCategory.price : newProduct.price)) - (parseFloat(discount) || 0),
         customer: {
           name: customer.name.trim(),
           email: customer.email?.toLowerCase()?.trim() || null,
@@ -880,7 +1009,7 @@ export const editSalesHistory = async (req, res) => {
         id,
         updates,
         { new: true, runValidators: true }
-      ).populate('product', 'name productId price stock image')
+      ).populate('product', 'name productId price stock image category')
        .populate('salesPerson', 'name email');
 
       res.status(200).json({
@@ -964,12 +1093,14 @@ export const deleteSalesHistory = async (req, res) => {
     // Store values for stock reversion
     const product = existingSale.product;
     const quantityToRevert = existingSale.quantity;
+    const categoryId = existingSale.categoryId;
     const saleDetails = {
       id: existingSale._id,
       productName: existingSale.productSnapshot?.name || product?.name,
       quantity: quantityToRevert,
       finalAmount: existingSale.finalAmount,
-      customer: existingSale.customer.name
+      customer: existingSale.customer.name,
+      categoryId: categoryId
     };
 
     // Check if product still exists
@@ -981,13 +1112,53 @@ export const deleteSalesHistory = async (req, res) => {
     }
 
     try {
-      // Revert product stock (add back the sold quantity)
-      const newStock = product.stock + quantityToRevert;
+      let reversionDetails = {};
       
-      await Product.findByIdAndUpdate(product._id, {
-        stock: newStock,
-        updatedBy: req.user._id
-      });
+      if (categoryId) {
+        // Revert category quantity (add back the sold quantity)
+        const productDoc = await Product.findById(product._id);
+        const categoryToRevert = productDoc.category.id(categoryId);
+        
+        if (categoryToRevert) {
+          const previousCategoryQuantity = categoryToRevert.quantity;
+          categoryToRevert.quantity += quantityToRevert;
+          productDoc.updatedBy = req.user._id;
+          await productDoc.save();
+          
+          reversionDetails = {
+            productId: product._id,
+            productName: product.name,
+            categoryId: categoryId,
+            categoryName: categoryToRevert.name,
+            previousCategoryQuantity: previousCategoryQuantity,
+            newCategoryQuantity: categoryToRevert.quantity,
+            quantityReverted: quantityToRevert,
+            type: 'category'
+          };
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: "Category not found for reversion"
+          });
+        }
+      } else {
+        // Revert product stock (add back the sold quantity)
+        const newStock = product.stock + quantityToRevert;
+        
+        await Product.findByIdAndUpdate(product._id, {
+          stock: newStock,
+          updatedBy: req.user._id
+        });
+        
+        reversionDetails = {
+          productId: product._id,
+          productName: product.name,
+          previousStock: product.stock,
+          newStock: newStock,
+          quantityReverted: quantityToRevert,
+          type: 'stock'
+        };
+      }
 
       // Delete the sales record
       await Sales.findByIdAndDelete(id);
@@ -997,26 +1168,29 @@ export const deleteSalesHistory = async (req, res) => {
         message: "Sales history deleted successfully",
         data: {
           deletedSale: saleDetails,
-          stockReverted: {
-            productId: product._id,
-            productName: product.name,
-            previousStock: product.stock,
-            newStock: newStock,
-            quantityReverted: quantityToRevert
-          }
+          reversionDetails: reversionDetails
         }
       });
 
     } catch (deleteError) {
       console.error('Delete operation failed:', deleteError);
       
-      // If deletion fails after stock update, try to revert stock
+      // If deletion fails after stock/category update, try to revert
       try {
-        await Product.findByIdAndUpdate(product._id, {
-          stock: product.stock
-        });
+        if (categoryId) {
+          const productDoc = await Product.findById(product._id);
+          const categoryToRevert = productDoc.category.id(categoryId);
+          if (categoryToRevert) {
+            categoryToRevert.quantity -= quantityToRevert;
+            await productDoc.save();
+          }
+        } else {
+          await Product.findByIdAndUpdate(product._id, {
+            stock: product.stock
+          });
+        }
       } catch (revertError) {
-        console.error('Stock revert failed:', revertError);
+        console.error('Stock/Category revert failed:', revertError);
       }
 
       throw deleteError;

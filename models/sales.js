@@ -6,11 +6,20 @@ const salesSchema = new mongoose.Schema({
     ref: 'Product',
     required: true
   },
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false
+  },
   productSnapshot: {
     name: String,
     productId: String,
     price: Number,
-    image: String
+    image: String,
+    category: {
+      name: String,
+      quantity: Number,
+      price: Number
+    }
   },
   quantity: {
     type: Number,
