@@ -23,13 +23,26 @@ export const createProduct = async (req, res) => {
     }
 
     try {
-      const {
+      let {
         name,
         description,
         price,
         stock,
         category
       } = req.body;
+
+      // Handle category data - parse if string (FormData), keep if already JSON
+      if (typeof category === 'string') {
+        category = JSON.parse(category);
+      }
+      
+      // Validate category is an array if provided
+      if (category && !Array.isArray(category)) {
+        return res.status(400).json({
+          success: false,
+          message: "Category must be an array"
+        });
+      }
 
       // Validate required fields
       if (!name || !price) {
@@ -321,6 +334,19 @@ export const updateProduct = async (req, res) => {
         return res.status(400).json({
           success: false,
           message: "Invalid product ID"
+        });
+      }
+
+      // Handle category data - parse if string (FormData), keep if already JSON
+      if (typeof updates.category === 'string') {
+        updates.category = JSON.parse(updates.category);
+      }
+      
+      // Validate category is an array if provided
+      if (updates.category && !Array.isArray(updates.category)) {
+        return res.status(400).json({
+          success: false,
+          message: "Category must be an array"
         });
       }
 
