@@ -111,6 +111,7 @@ export const createSalesRecord = async (req, res) => {
       discount: 0, // Normal users can't apply discounts
       customer: {
         name: customer.name.trim(),
+        businessName: customer.businessName?.trim() || null,
         email: customer.email?.toLowerCase()?.trim() || null,
         phone: customer.phone?.trim() || null,
         address: customer.address?.trim() || null
@@ -377,6 +378,7 @@ export const updateSalesRecord = async (req, res) => {
       
       updates.customer = {
         name: customer.name?.trim() || existingSale.customer.name,
+        businessName: customer.businessName?.trim() || existingSale.customer.businessName,
         email: customer.email?.toLowerCase()?.trim() || existingSale.customer.email,
         phone: customer.phone?.trim() || existingSale.customer.phone,
         address: customer.address?.trim() || existingSale.customer.address
@@ -703,6 +705,7 @@ export const getRecentSalesHistory = async (req, res) => {
       },
       customer: {
         name: sale.customer.name,
+        businessName: sale.customer.businessName,
         email: sale.customer.email,
         phone: sale.customer.phone,
         address: sale.customer?.address
@@ -923,6 +926,7 @@ export const editSalesHistory = async (req, res) => {
         finalAmount: (parseInt(quantity) * (selectedCategory ? selectedCategory.price : newProduct.price)) - (parseFloat(discount) || 0),
         customer: {
           name: customer.name.trim(),
+          businessName: customer.businessName?.trim() || null,
           email: customer.email?.toLowerCase()?.trim() || null,
           phone: customer.phone?.trim() || null,
           address: customer.address?.trim() || null

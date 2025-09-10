@@ -50,6 +50,10 @@ const salesSchema = new mongoose.Schema({
       required: true,
       trim: true
     },
+    businessName: {
+      type: String,
+      trim: true
+    },
     email: {
       type: String,
       lowercase: true,
