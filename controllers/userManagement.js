@@ -130,6 +130,10 @@ export const getAllUsers = async (req, res) => {
     const filter = {};
     if (role) filter.role = role;
     if (isActive !== undefined) filter.isActive = isActive === 'true';
+    
+    // Exclude the current user from results
+    filter._id = { $ne: req.user._id };
+    
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
