@@ -771,6 +771,7 @@ export const editSalesHistory = async (req, res) => {
     // Store original values for rollback
     const originalQuantity = existingSale.quantity;
     const originalProduct = existingSale.product;
+    const originalCategoryId = existingSale.categoryId;
 
     // Validate required fields
     if (!productId || !quantity || !customer?.name) {
@@ -832,145 +833,73 @@ export const editSalesHistory = async (req, res) => {
       }
     }
 
-    // Calculate stock changes
+    // Calculate stock changes - handle all scenarios
     let stockChanges = {};
     
-    if (isProductChanged) {
-      // Different product: revert original product stock and deduct from new product
+    // First, revert the original sale (add back what was sold)
+    if (originalCategoryId) {
+      // Original sale was from a category - revert category quantity
+      const originalProductDoc = await Product.findById(originalProduct._id);
+      const originalCategory = originalProductDoc.category.id(originalCategoryId);
+      if (originalCategory) {
+        originalCategory.quantity += originalQuantity;
+        await originalProductDoc.save();
+      }
+    } else {
+      // Original sale was from product stock - revert stock
       const originalProductStockAfterRevert = originalProduct.stock + originalQuantity;
-      
-      // Check stock availability for new product
-      if (selectedCategory) {
-        // Check category quantity if category is selected
-        if (!selectedCategory.quantity || selectedCategory.quantity < quantity) {
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient category quantity for new product. Available: ${selectedCategory.quantity || 0}, Requested: ${quantity}`
-          });
-        }
-      } else {
-        // Check product stock if no category is selected
-        if (newProduct.stock < quantity) {
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient stock for new product. Available: ${newProduct.stock}, Requested: ${quantity}`
-          });
-        }
+      await Product.findByIdAndUpdate(originalProduct._id, {
+        stock: originalProductStockAfterRevert,
+        updatedBy: req.user._id
+      });
+    }
+    
+    // Now handle the new sale
+    if (selectedCategory) {
+      // New sale is from a category
+      if (!selectedCategory.quantity || selectedCategory.quantity < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient category quantity. Available: ${selectedCategory.quantity || 0}, Requested: ${quantity}`
+        });
       }
       
-      const newProductStockAfterDeduct = selectedCategory ? newProduct.stock : newProduct.stock - quantity;
-
+      // Deduct from category quantity
+      selectedCategory.quantity -= quantity;
+      await newProduct.save();
+      
       stockChanges = {
-        originalProduct: {
-          id: originalProduct._id,
-          newStock: originalProductStockAfterRevert
-        },
-        newProduct: {
-          id: newProduct._id,
-          newStock: newProductStockAfterDeduct
-        }
+        type: 'category',
+        productId: newProduct._id,
+        categoryId: categoryId,
+        newCategoryQuantity: selectedCategory.quantity
       };
     } else {
-      // Same product: calculate stock difference
-      const quantityDifference = quantity - originalQuantity;
-      
-      if (selectedCategory) {
-        // Handle category quantity changes
-        const newCategoryQuantity = selectedCategory.quantity - quantityDifference;
-        
-        // Check if category has enough quantity for increase
-        if (quantityDifference > 0 && selectedCategory.quantity < quantityDifference) {
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient category quantity for increase. Available: ${selectedCategory.quantity}, Additional needed: ${quantityDifference}`
-          });
-        }
-
-        // Prevent negative category quantity
-        if (newCategoryQuantity < 0) {
-          return res.status(400).json({
-            success: false,
-            message: `Invalid operation would result in negative category quantity`
-          });
-        }
-
-        stockChanges = {
-          sameProduct: {
-            id: originalProduct._id,
-            newStock: originalProduct.stock, // Stock remains unchanged
-            categoryId: categoryId,
-            newCategoryQuantity: newCategoryQuantity
-          }
-        };
-      } else {
-        // Handle product stock changes
-        const newStock = originalProduct.stock - quantityDifference;
-
-        // Check if product has enough stock for increase
-        if (quantityDifference > 0 && originalProduct.stock < quantityDifference) {
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient stock for quantity increase. Available: ${originalProduct.stock}, Additional needed: ${quantityDifference}`
-          });
-        }
-
-        // Prevent negative stock
-        if (newStock < 0) {
-          return res.status(400).json({
-            success: false,
-            message: `Invalid operation would result in negative stock`
-          });
-        }
-
-        stockChanges = {
-          sameProduct: {
-            id: originalProduct._id,
-            newStock: newStock
-          }
-        };
+      // New sale is from product stock
+      if (newProduct.stock < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock. Available: ${newProduct.stock}, Requested: ${quantity}`
+        });
       }
+      
+      // Deduct from product stock
+      const newStock = newProduct.stock - quantity;
+      await Product.findByIdAndUpdate(newProduct._id, {
+        stock: newStock,
+        updatedBy: req.user._id
+      });
+      
+      stockChanges = {
+        type: 'stock',
+        productId: newProduct._id,
+        newStock: newStock
+      };
     }
 
     // Start transaction-like operations
     try {
-      // Update product stocks and category quantities
-      if (stockChanges.originalProduct) {
-        // Different products
-        await Product.findByIdAndUpdate(stockChanges.originalProduct.id, {
-          stock: stockChanges.originalProduct.newStock,
-          updatedBy: req.user._id
-        });
-
-        if (selectedCategory) {
-          // Update category quantity for new product
-          const newProductDoc = await Product.findById(stockChanges.newProduct.id);
-          const categoryToUpdate = newProductDoc.category.id(categoryId);
-          categoryToUpdate.quantity -= quantity;
-          await newProductDoc.save();
-        } else {
-          // Update product stock for new product
-          await Product.findByIdAndUpdate(stockChanges.newProduct.id, {
-            stock: stockChanges.newProduct.newStock,
-            updatedBy: req.user._id
-          });
-        }
-      } else {
-        // Same product
-        if (stockChanges.sameProduct.categoryId) {
-          // Update category quantity
-          const productDoc = await Product.findById(stockChanges.sameProduct.id);
-          const categoryToUpdate = productDoc.category.id(stockChanges.sameProduct.categoryId);
-          categoryToUpdate.quantity = stockChanges.sameProduct.newCategoryQuantity;
-          productDoc.updatedBy = req.user._id;
-          await productDoc.save();
-        } else {
-          // Update product stock
-          await Product.findByIdAndUpdate(stockChanges.sameProduct.id, {
-            stock: stockChanges.sameProduct.newStock,
-            updatedBy: req.user._id
-          });
-        }
-      }
+      // Stock and category quantities have already been updated above
 
       // Update sales record
       const updates = {
@@ -1017,19 +946,7 @@ export const editSalesHistory = async (req, res) => {
         message: "Sales history updated successfully",
         data: {
           sale: updatedSale,
-          stockChanges: {
-            originalProduct: stockChanges.originalProduct ? {
-              id: stockChanges.originalProduct.id,
-              newStock: stockChanges.originalProduct.newStock
-            } : null,
-            newProduct: stockChanges.newProduct ? {
-              id: stockChanges.newProduct.id,
-              newStock: stockChanges.newProduct.newStock
-            } : stockChanges.sameProduct ? {
-              id: stockChanges.sameProduct.id,
-              newStock: stockChanges.sameProduct.newStock
-            } : null
-          }
+          stockChanges: stockChanges
         }
       });
 
@@ -1039,15 +956,30 @@ export const editSalesHistory = async (req, res) => {
       
       // Try to revert stock changes
       try {
-        if (stockChanges.originalProduct) {
-          await Product.findByIdAndUpdate(stockChanges.originalProduct.id, {
-            stock: originalProduct.stock
-          });
-          await Product.findByIdAndUpdate(stockChanges.newProduct.id, {
+        // Revert the new sale
+        if (stockChanges.type === 'category') {
+          const productDoc = await Product.findById(stockChanges.productId);
+          const categoryToRevert = productDoc.category.id(stockChanges.categoryId);
+          if (categoryToRevert) {
+            categoryToRevert.quantity += quantity;
+            await productDoc.save();
+          }
+        } else if (stockChanges.type === 'stock') {
+          await Product.findByIdAndUpdate(stockChanges.productId, {
             stock: newProduct.stock
           });
+        }
+        
+        // Revert the original sale reversion
+        if (originalCategoryId) {
+          const originalProductDoc = await Product.findById(originalProduct._id);
+          const originalCategory = originalProductDoc.category.id(originalCategoryId);
+          if (originalCategory) {
+            originalCategory.quantity -= originalQuantity;
+            await originalProductDoc.save();
+          }
         } else {
-          await Product.findByIdAndUpdate(stockChanges.sameProduct.id, {
+          await Product.findByIdAndUpdate(originalProduct._id, {
             stock: originalProduct.stock
           });
         }
