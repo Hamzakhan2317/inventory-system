@@ -803,7 +803,7 @@ export const editSalesHistory = async (req, res) => {
 
     // Check what's changing
     const isProductChanged = productId !== existingSale.product._id.toString();
-    const isCategoryChanged = categoryId !== (originalCategoryId?.toString() || null);
+    const isCategoryChanged = (categoryId || null) !== (originalCategoryId?.toString() || null);
     
     let newProduct;
     if (isProductChanged) {
@@ -843,6 +843,7 @@ export const editSalesHistory = async (req, res) => {
     const quantityDifference = quantity - originalQuantity;
     
     if (isProductChanged) {
+      console.log("Edit Debug - Executing: Product changed branch");
       // Product changed - need to revert original and apply new
       // First, revert the original sale (add back what was sold)
       if (originalCategoryId) {
@@ -905,6 +906,7 @@ export const editSalesHistory = async (req, res) => {
         };
       }
     } else if (isCategoryChanged) {
+      console.log("Edit Debug - Executing: Category changed branch");
       // Same product, but category changed - handle category switch
       // First, revert the original category/stock
       if (originalCategoryId) {
@@ -969,6 +971,7 @@ export const editSalesHistory = async (req, res) => {
         };
       }
     } else {
+      console.log("Edit Debug - Executing: Same product and category branch");
       // Same product and category - smart quantity adjustment
       if (quantityDifference === 0) {
         // Quantity unchanged - no stock changes needed
