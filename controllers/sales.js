@@ -667,7 +667,6 @@ export const getRecentSalesHistory = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-      console.log("salesHistory>>>>>>>>>>>>>>>>>>>", salesHistory);
 
     const total = await Sales.countDocuments(filter);
 
@@ -689,7 +688,8 @@ export const getRecentSalesHistory = async (req, res) => {
         unitPrice: sale.unitPrice,
         currentStock: sale.product?.stock, // Remaining stock
         description: sale.product?.description,
-        image: sale.product?.image
+        image: sale.product?.image,
+        categories: sale.product?.category || []
       },
       category: sale.categoryId ? {
         id: sale.categoryId,
