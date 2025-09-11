@@ -100,7 +100,7 @@ export const createSalesRecord = async (req, res) => {
         image: product.image,
         category: selectedCategory ? {
           name: selectedCategory.name,
-          quantity: parseInt(quantity),
+          quantity: selectedCategory.quantity,
           price: selectedCategory.price
         } : null
       },
