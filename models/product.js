@@ -23,6 +23,12 @@ const productSchema = new mongoose.Schema({
   },
   // Single image field (URL string like user profileImage)
   image: String,
+  // Product type reference
+  productType: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ProductType',
+    required: false
+  },
   // Category array with name, quantity, and price (optional)
   category: [{
     name: {

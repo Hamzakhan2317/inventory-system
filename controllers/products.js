@@ -1,4 +1,4 @@
-import { User, Product, Sales } from "../models/index.js";
+import { User, Product, Sales, ProductType } from "../models/index.js";
 import mongoose from "mongoose";
 import { uploadFilesToCloudinary, deleteFromCloudinary, deleteMultipleFromCloudinary } from "../middlewares/cloudinaryUpload.js";
 
@@ -28,7 +28,8 @@ export const createProduct = async (req, res) => {
         description,
         price,
         stock,
-        category
+        category,
+        productType
       } = req.body;
 
       // Handle category data - parse if string (FormData), keep if already JSON
@@ -55,6 +56,34 @@ export const createProduct = async (req, res) => {
           success: false,
           message: "Name and price are required"
         });
+      }
+
+      // Validate productType if provided
+      if (productType) {
+        if (!mongoose.Types.ObjectId.isValid(productType)) {
+          // Clean up uploaded image if validation fails
+          if (req.uploadedFiles?.productImage?.[0]) {
+            await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+          }
+          
+          return res.status(400).json({
+            success: false,
+            message: "Invalid product type ID"
+          });
+        }
+
+        const productTypeExists = await ProductType.findById(productType);
+        if (!productTypeExists) {
+          // Clean up uploaded image if validation fails
+          if (req.uploadedFiles?.productImage?.[0]) {
+            await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+          }
+          
+          return res.status(400).json({
+            success: false,
+            message: "Product type not found"
+          });
+        }
       }
 
       // Validate category if provided (completely optional)
@@ -111,6 +140,7 @@ export const createProduct = async (req, res) => {
         price,
         stock: stock || 0,
         image,
+        productType: productType || null,
         category: category || [],
         createdBy: req.user._id
       });
@@ -193,6 +223,7 @@ export const getAllProducts = async (req, res) => {
 
     const products = await Product.find(filter)
       .populate('createdBy updatedBy', 'name email')
+      .populate('productType', 'name')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
@@ -251,7 +282,8 @@ export const getProductById = async (req, res) => {
     }
 
     const product = await Product.findById(id)
-      .populate('createdBy updatedBy', 'name email');
+      .populate('createdBy updatedBy', 'name email')
+      .populate('productType', 'name');
 
     if (!product) {
       return res.status(404).json({
@@ -329,6 +361,7 @@ export const updateProduct = async (req, res) => {
     try {
       const { id } = req.params;
       const updates = req.body;
+      const { productType } = updates;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(400).json({
@@ -348,6 +381,34 @@ export const updateProduct = async (req, res) => {
           success: false,
           message: "Category must be an array"
         });
+      }
+
+      // Validate productType if provided
+      if (productType) {
+        if (!mongoose.Types.ObjectId.isValid(productType)) {
+          // Clean up uploaded image if validation fails
+          if (req.uploadedFiles?.productImage?.[0]) {
+            await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+          }
+          
+          return res.status(400).json({
+            success: false,
+            message: "Invalid product type ID"
+          });
+        }
+
+        const productTypeExists = await ProductType.findById(productType);
+        if (!productTypeExists) {
+          // Clean up uploaded image if validation fails
+          if (req.uploadedFiles?.productImage?.[0]) {
+            await deleteFromCloudinary(req.uploadedFiles.productImage[0].publicId);
+          }
+          
+          return res.status(400).json({
+            success: false,
+            message: "Product type not found"
+          });
+        }
       }
 
       // Don't allow updating certain fields
@@ -444,7 +505,8 @@ export const updateProduct = async (req, res) => {
           updatedBy: req.user._id 
         },
         { new: true, runValidators: true }
-      ).populate('createdBy updatedBy', 'name email');
+      ).populate('createdBy updatedBy', 'name email')
+       .populate('productType', 'name');
 
       res.status(200).json({
         success: true,
@@ -474,12 +536,31 @@ export const updateProductBasic = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const { productType } = updates;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: "Invalid product ID"
       });
+    }
+
+    // Validate productType if provided
+    if (productType) {
+      if (!mongoose.Types.ObjectId.isValid(productType)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid category type ID"
+        });
+      }
+
+      const productTypeExists = await ProductType.findById(productType);
+      if (!productTypeExists || !productTypeExists.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: "Category type not found or inactive"
+        });
+      }
     }
 
     // Don't allow updating certain fields
@@ -535,7 +616,8 @@ export const updateProductBasic = async (req, res) => {
       id,
       { ...updates, updatedBy: req.user._id },
       { new: true, runValidators: true }
-    ).populate('createdBy updatedBy', 'name email');
+    ).populate('createdBy updatedBy', 'name email')
+     .populate('productType', 'name');
 
     res.status(200).json({
       success: true,
@@ -837,7 +919,8 @@ export const getAvailableProducts = async (req, res) => {
 
     // Get only essential product information for normal users
     const products = await Product.find(filter)
-      .select('name description price stock isActive category image createdAt')
+      .select('name description price stock isActive category productType image createdAt')
+      .populate('productType', 'name')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));

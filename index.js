@@ -5,6 +5,7 @@ import cors from "cors";
 import productRoutes from "./routes/products.js";
 import salesRoutes from "./routes/sales.js";
 import reportingRoutes from "./routes/reporting.js";
+import productTypeRoutes from "./routes/productType.js";
 import passport from "passport";
 import "dotenv/config";
 import { connectDB } from "./database/db.js";
@@ -37,6 +38,7 @@ app.use("/api/users", UserManagementRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/reports", reportingRoutes);
+app.use("/api/product-types", productTypeRoutes);
 
 
 app.get("/*", (req, res) => {
