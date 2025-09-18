@@ -58,8 +58,11 @@ export const createProduct = async (req, res) => {
         });
       }
 
-      // Validate productType if provided
-      if (productType) {
+      // Handle productType - set to null if not provided or empty
+      if (!productType || productType === '' || productType === null) {
+        productType = null;
+      } else {
+        // Validate productType if provided
         if (!mongoose.Types.ObjectId.isValid(productType)) {
           // Clean up uploaded image if validation fails
           if (req.uploadedFiles?.productImage?.[0]) {
@@ -383,8 +386,11 @@ export const updateProduct = async (req, res) => {
         });
       }
 
-      // Validate productType if provided
-      if (productType) {
+      // Handle productType - set to null if not provided or empty
+      if (!productType || productType === '' || productType === null) {
+        updates.productType = null;
+      } else {
+        // Validate productType if provided
         if (!mongoose.Types.ObjectId.isValid(productType)) {
           // Clean up uploaded image if validation fails
           if (req.uploadedFiles?.productImage?.[0]) {
@@ -545,8 +551,11 @@ export const updateProductBasic = async (req, res) => {
       });
     }
 
-    // Validate productType if provided
-    if (productType) {
+    // Handle productType - set to null if not provided or empty
+    if (!productType || productType === '' || productType === null) {
+      updates.productType = null;
+    } else {
+      // Validate productType if provided
       if (!mongoose.Types.ObjectId.isValid(productType)) {
         return res.status(400).json({
           success: false,
