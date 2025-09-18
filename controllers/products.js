@@ -550,15 +550,15 @@ export const updateProductBasic = async (req, res) => {
       if (!mongoose.Types.ObjectId.isValid(productType)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid category type ID"
+          message: "Invalid product type ID"
         });
       }
 
       const productTypeExists = await ProductType.findById(productType);
-      if (!productTypeExists || !productTypeExists.isActive) {
+      if (!productTypeExists) {
         return res.status(400).json({
           success: false,
-          message: "Category type not found or inactive"
+          message: "Product type not found"
         });
       }
     }

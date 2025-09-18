@@ -661,7 +661,11 @@ export const getRecentSalesHistory = async (req, res) => {
       })
       .populate({
         path: 'product',
-        select: 'name productId price stock description image category'
+        select: 'name productId price stock description image category productType',
+        populate: {
+          path: 'productType',
+          select: 'name'
+        }
       })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -689,7 +693,11 @@ export const getRecentSalesHistory = async (req, res) => {
         currentStock: sale.product?.stock, // Remaining stock
         description: sale.product?.description,
         image: sale.product?.image,
-        categories: sale.product?.category || []
+        categories: sale.product?.category || [],
+        productType: sale.product?.productType ? {
+          id: sale.product.productType._id,
+          name: sale.product.productType.name
+        } : null
       },
       category: sale.categoryId ? {
         id: sale.categoryId,
