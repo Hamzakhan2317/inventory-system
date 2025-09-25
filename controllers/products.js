@@ -179,9 +179,6 @@ export const getAllProducts = async (req, res) => {
     const {
       page = 1,
       limit = 5000,
-      category,
-      brand,
-      isActive,
       lowStock,
       search,
       sortBy = 'createdAt',
@@ -190,15 +187,10 @@ export const getAllProducts = async (req, res) => {
       maxPrice
     } = req.query;
 
-    // Build filter object
-    const filter = {};
+    // Build filter object - only active products
+    const filter = { isActive: true };
     
-    // For normal users, only show active products
-    if (req.user.role === 'normal_user') {
-      filter.isActive = true;
-    } else if (isActive !== undefined) {
-      filter.isActive = isActive === 'true';
-    }
+    // Always restrict to active products, ignoring role and isActive query param
 
     // Simplified filtering - category and brand removed from schema
     if (lowStock === 'true') {
