@@ -1,4 +1,4 @@
-import { User, Product, Sales } from "../models/index.js";
+import { User, Product, Sales, Customer } from "../models/index.js";
 import mongoose from "mongoose";
 
 // ============================================================================
@@ -14,15 +14,24 @@ export const createSalesRecord = async (req, res) => {
       categoryId,
       quantity,
       customer,
+      customerId,
       saleDate,
       notes
     } = req.body;
 
     // Validate required fields
-    if (!productId || !quantity || !customer?.name) {
+    if (!productId || !quantity) {
       return res.status(400).json({
         success: false,
-        message: "Product ID, quantity, and customer name are required"
+        message: "Product ID and quantity are required"
+      });
+    }
+
+    // Validate customer information - either customerId or customer object is required
+    if (!customerId && !customer?.name) {
+      return res.status(400).json({
+        success: false,
+        message: "Either customerId or customer information is required"
       });
     }
 
@@ -81,18 +90,92 @@ export const createSalesRecord = async (req, res) => {
       }
     }
 
-    // Validate customer information
-    if (!customer.name || customer.name.trim().length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: "Customer name must be at least 2 characters long"
+    // Handle customer - either use existing customerId or create new customer
+    let finalCustomerId = null;
+    let customerData = null;
+
+    if (customerId) {
+      // Validate customerId if provided
+      if (!mongoose.Types.ObjectId.isValid(customerId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid customer ID"
+        });
+      }
+
+      // Check if customer exists and is active
+      const existingCustomer = await Customer.findById(customerId);
+      if (!existingCustomer) {
+        return res.status(404).json({
+          success: false,
+          message: "Customer not found"
+        });
+      }
+
+      if (!existingCustomer.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: "Customer is not active"
+        });
+      }
+
+      finalCustomerId = customerId;
+      customerData = {
+        name: existingCustomer.name,
+        businessName: existingCustomer.businessName,
+        email: existingCustomer.email,
+        phone: existingCustomer.phone,
+        address: existingCustomer.address
+      };
+    } else {
+      // Create new customer from provided customer data
+      if (!customer.name || customer.name.trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Customer name must be at least 2 characters long"
+        });
+      }
+
+      // Check for duplicate email if provided
+      if (customer.email && customer.email.trim()) {
+        const existingCustomer = await Customer.findOne({ 
+          email: customer.email.toLowerCase().trim() 
+        });
+        
+        if (existingCustomer) {
+          return res.status(400).json({
+            success: false,
+            message: "Customer with this email already exists. Please use the existing customer ID instead."
+          });
+        }
+      }
+
+      // Create new customer
+      const newCustomer = new Customer({
+        name: customer.name.trim(),
+        businessName: customer.businessName?.trim() || null,
+        email: customer.email?.trim() ? customer.email.toLowerCase().trim() : null,
+        phone: customer.phone?.trim() || null,
+        address: customer.address?.trim() || null,
+        createdBy: req.user?._id || null
       });
+
+      await newCustomer.save();
+      finalCustomerId = newCustomer._id;
+      customerData = {
+        name: newCustomer.name,
+        businessName: newCustomer.businessName,
+        email: newCustomer.email,
+        phone: newCustomer.phone,
+        address: newCustomer.address
+      };
     }
 
     // Create sale record with product snapshot
     const newSale = new Sales({
       product: product._id,
       categoryId: categoryId ? new mongoose.Types.ObjectId(categoryId) : null,
+      customerId: finalCustomerId,
       productSnapshot: {
         name: product.name,
         productId: product.productId,
@@ -109,20 +192,14 @@ export const createSalesRecord = async (req, res) => {
       totalAmount: parseInt(quantity) * (selectedCategory ? selectedCategory.price : product.price),
       finalAmount: parseInt(quantity) * (selectedCategory ? selectedCategory.price : product.price),
       discount: 0, // Normal users can't apply discounts
-      customer: {
-        name: customer.name.trim(),
-        businessName: customer.businessName,
-        email: customer.email && customer.email.trim() ? customer.email.toLowerCase().trim() : null,
-        phone: customer.phone && customer.phone.trim() ? customer.phone.trim() : null,
-        address: customer.address && customer.address.trim() ? customer.address.trim() : null
-      },
-      salesPerson: req.user._id,
+      customer: customerData,
+      salesPerson: req.user?._id || null,
       paymentMethod: 'cash', // Default for normal users
       paymentStatus: 'completed', // Assume completed for normal users
       transactionId: null,
       notes: notes?.trim() || null,
       saleDate: saleDate ? new Date(saleDate) : new Date(),
-      createdBy: req.user._id
+      createdBy: req.user?._id || null
     });
 
     await newSale.save();
@@ -141,13 +218,22 @@ export const createSalesRecord = async (req, res) => {
     // Populate the created sale for response
     const populatedSale = await Sales.findById(newSale._id)
       .populate('product', 'name productId price image')
-      .populate('salesPerson', 'name email');
+      .populate('salesPerson', 'name email')
+      .populate('customerId', 'name businessName email phone address');
 
     res.status(201).json({
       success: true,
       message: "Sales record created successfully",
       data: {
         sale: populatedSale,
+        customerInfo: {
+          customerId: finalCustomerId,
+          customerName: customerData.name,
+          customerBusinessName: customerData.businessName,
+          customerEmail: customerData.email,
+          customerPhone: customerData.phone,
+          customerAddress: customerData.address
+        },
         productStockAfterSale: product.stock,
         categoryInfo: selectedCategory ? {
           categoryId: selectedCategory._id,
