@@ -44,6 +44,11 @@ const salesSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Customer',
+    required: false
+  },
   customer: {
     name: {
       type: String,
