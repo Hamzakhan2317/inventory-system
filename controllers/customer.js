@@ -292,22 +292,23 @@ export const deleteCustomer = async (req, res) => {
 export const getCustomersForDropdown = async (req, res) => {
   try {
     const customers = await Customer.find({ isActive: true })
+      // .select('name businessName email phone')
       .sort({ name: 1 });
 
-    const formattedCustomers = customers.map(customer => ({
-      id: customer._id,
-      name: customer.name,
-      businessName: customer.businessName,
-      email: customer.email,
-      phone: customer.phone,
-      displayName: customer.businessName 
-        ? `${customer.name} (${customer.businessName})` 
-        : customer.name
-    }));
+    // const formattedCustomers = customers.map(customer => ({
+    //   id: customer._id,
+    //   name: customer.name,
+    //   businessName: customer.businessName,
+    //   email: customer.email,
+    //   phone: customer.phone,
+    //   displayName: customer.businessName 
+    //     ? `${customer.name} (${customer.businessName})` 
+    //     : customer.name
+    // }));
 
     res.status(200).json({
       success: true,
-      data: formattedCustomers
+      data: customers
     });
 
   } catch (error) {
