@@ -292,7 +292,6 @@ export const deleteCustomer = async (req, res) => {
 export const getCustomersForDropdown = async (req, res) => {
   try {
     const customers = await Customer.find({ isActive: true })
-      .select('name businessName email phone')
       .sort({ name: 1 });
 
     const formattedCustomers = customers.map(customer => ({
