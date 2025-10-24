@@ -58,6 +58,10 @@ const userSchema = new mongoose.Schema({
   },
   profileImage: String,
   lastLogin: Date,
+  fcmToken:  {
+    type: String,
+    trim: true
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

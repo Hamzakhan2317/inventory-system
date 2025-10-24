@@ -219,14 +219,45 @@ export const getUnverifiedBusinessCustomers = async (req, res) => {
   });
 };
 
+// Get available subroles
+export const getSubRoles = async (req, res) => {
+  const subRoles = [
+    { value: 'individual', label: 'Individual' },
+    { value: 'wholesale', label: 'Wholesale' },
+    { value: 'store_owner', label: 'Store Owner' }
+  ];
+
+  res.status(200).json({
+    success: true,
+    message: "SubRoles fetched successfully",
+    data: subRoles
+  });
+};
+
 // Verify business customer
 export const verifyBusinessCustomer = async (req, res) => {
   const { id } = req.params;
+  const { subRole } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({
       success: false,
       message: "Invalid user ID"
+    });
+  }
+
+  if (!subRole) {
+    return res.status(400).json({
+      success: false,
+      message: "SubRole is required"
+    });
+  }
+
+  const validSubRoles = ['individual', 'wholesale', 'store_owner'];
+  if (!validSubRoles.includes(subRole)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid subRole. Must be one of: individual, wholesale, store_owner"
     });
   }
 
@@ -254,6 +285,7 @@ export const verifyBusinessCustomer = async (req, res) => {
   }
 
   user.isVerified = true;
+  user.subRole = subRole;
   user.updatedBy = req.user._id;
   await user.save();
 
