@@ -2,6 +2,9 @@ import { Router } from "express";
 import {
   createUser,
   getAllUsers,
+  getUnverifiedBusinessCustomers,
+  getSubRoles,
+  verifyBusinessCustomer,
   getUserById,
   updateUser,
   updateUserBasic,
@@ -27,6 +30,20 @@ userManagementRoutes.post("/",
 userManagementRoutes.get("/", 
   requireUserManagement,
   catchAsync(getAllUsers)
+);
+
+userManagementRoutes.get("/unverified-business-customers", 
+  // requireUserManagement,
+  catchAsync(getUnverifiedBusinessCustomers)
+);
+
+userManagementRoutes.get("/subroles", 
+  catchAsync(getSubRoles)
+);
+
+userManagementRoutes.patch("/verify-business-customer/:id", 
+  // requireUserManagement,
+  catchAsync(verifyBusinessCustomer)
 );
 
 userManagementRoutes.get("/:id", 

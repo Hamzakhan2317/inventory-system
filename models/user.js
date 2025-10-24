@@ -17,6 +17,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  businessName: {
+    type: String,
+    trim: true
+  },
+  address: {
+    type: String,
+    trim: true
+  },
   password: {
     type: String,
     required: true,
@@ -24,8 +32,11 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['super_admin', 'admin', 'normal_user', 'sales_person'],
-    default: 'normal_user'
+    enum: ['admin', 'manager', 'employee', 'business_customer'],
+  },
+  subRole: {
+    type: String,
+    enum: ['individual', 'wholesale', 'store_owner'],
   },
   permissions: {
     canManageUsers: { type: Boolean, default: false },
@@ -47,6 +58,10 @@ const userSchema = new mongoose.Schema({
   },
   profileImage: String,
   lastLogin: Date,
+  fcmToken:  {
+    type: String,
+    trim: true
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
