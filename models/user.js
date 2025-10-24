@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema({
   },
   subRole: {
     type: String,
-    enum: ['individual', 'whole_sale', 'store_owner'],
+    enum: ['individual', 'wholesale', 'store_owner'],
   },
   permissions: {
     canManageUsers: { type: Boolean, default: false },
