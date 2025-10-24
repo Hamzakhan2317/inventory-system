@@ -17,6 +17,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  businessName: {
+    type: String,
+    trim: true
+  },
+  address: {
+    type: String,
+    trim: true
+  },
   password: {
     type: String,
     required: true,
@@ -24,8 +32,11 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['super_admin', 'admin', 'normal_user', 'sales_person'],
-    default: 'normal_user'
+    enum: ['admin', 'manager', 'employee', 'business_customer'],
+  },
+  subRole: {
+    type: String,
+    enum: ['individual', 'whole_sale', 'store_owner'],
   },
   permissions: {
     canManageUsers: { type: Boolean, default: false },

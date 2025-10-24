@@ -12,10 +12,10 @@ export const createUser = async (req, res) => {
     const { name, email, phone, password, role, permissions } = req.body;
 
     // Validate required fields
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !role) {
       return res.status(400).json({
         success: false,
-        message: "Name, email, and password are required"
+        message: "Name, email, password and role are required"
       });
     }
 
@@ -36,7 +36,7 @@ export const createUser = async (req, res) => {
       canRecordSales: true
     };
 
-    if (role === 'super_admin' || role === 'admin') {
+    if (role === 'admin' || role === 'manager' || role === 'employee' || role === 'business_customer') {
       userPermissions = {
         canManageUsers: true,
         canManageProducts: true,
@@ -55,15 +55,13 @@ export const createUser = async (req, res) => {
       email,
       phone,
       password,
-      role: role || 'normal_user',
+      role,
       permissions: userPermissions,
       createdBy: req.user._id,
       isVerified: true // Auto-verify admin created users
     });
 
     await newUser.save();
-
-
 
     // Remove password from response
     const userResponse = newUser.toObject();

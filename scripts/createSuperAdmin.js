@@ -44,7 +44,7 @@ const createSuperAdmin = async () => {
       name: 'Super Administrator',
       email: 'admin@inventory.com',
       password: 'Admin@123',
-      role: 'super_admin',
+      role: 'admin',
       permissions: {
         canManageUsers: true,
         canManageProducts: true,

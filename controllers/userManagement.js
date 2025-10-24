@@ -202,6 +202,68 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
+// Get all unverified business customers
+export const getUnverifiedBusinessCustomers = async (req, res) => {
+  const users = await User.find({
+    role: 'business_customer',
+    isVerified: false
+  })
+    .select('-password')
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    message: "Unverified business customers fetched successfully",
+    data: users
+  });
+};
+
+// Verify business customer
+export const verifyBusinessCustomer = async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid user ID"
+    });
+  }
+
+  const user = await User.findById(id);
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "User not found"
+    });
+  }
+
+  if (user.role !== 'business_customer') {
+    return res.status(400).json({
+      success: false,
+      message: "User is not a business customer"
+    });
+  }
+
+  if (user.isVerified) {
+    return res.status(400).json({
+      success: false,
+      message: "User is already verified"
+    });
+  }
+
+  user.isVerified = true;
+  user.updatedBy = req.user._id;
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Business customer verified successfully",
+    data: user
+  });
+};
+
 // Get user by ID
 export const getUserById = async (req, res) => {
   try {
